@@ -1,6 +1,14 @@
+# PHANTOM-FACE requirements
+# Fork of Deep-Live-Cam with performance optimizations
+
 numpy>=1.23.5,<2
 typing-extensions>=4.8.0
+
+# OpenCV — use opencv-python for basic install.
+# For CUDA acceleration, install opencv-contrib-python built with CUDA instead:
+#   pip install opencv-contrib-python  (or build from source with CUDA flags)
 opencv-python==4.10.0.84
+
 cv2_enumerate_cameras==1.1.15
 onnx==1.18.0
 insightface==0.7.3
@@ -8,9 +16,21 @@ psutil==5.9.8
 tk==0.1.0
 customtkinter==5.2.2
 pillow==12.1.1
+
+# ONNX Runtime — GPU version for CUDA
 onnxruntime-silicon==1.16.3; sys_platform == 'darwin' and platform_machine == 'arm64'
 onnxruntime-gpu==1.24.2; sys_platform != 'darwin'
-tensorflow; sys_platform != 'darwin'
-opennsfw2==0.10.2
+
+# TensorFlow — ONLY needed if you enable the NSFW filter (--nsfw-filter)
+# PHANTOM: Not auto-installed. Install manually if needed:
+#   pip install tensorflow opennsfw2
+# tensorflow; sys_platform != 'darwin'
+# opennsfw2==0.10.2
+
 protobuf==4.25.1
-pygrabber
+websockets>=14.0
+pyvirtualcam>=0.10.0
+pygrabber; sys_platform == 'win32'
+
+# Optional: TensorRT for maximum ONNX inference speed on NVIDIA GPUs
+# pip install tensorrt

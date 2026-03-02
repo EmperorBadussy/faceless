@@ -7,22 +7,44 @@ __pycache__/
 *.log
 *.backup
 tf_env/
+
+# Media / test files
 *.png
+*.jpg
+*.jpeg
 *.mp4
 *.mkv
+faces/
+assets/fonts/
 
+# Models (large binary files)
+/models
+*.onnx
+*.pth
+
+# Python virtualenvs
 .tmp/
 temp/
 .venv/
 venv/
 env/
+
+# Build / IDE
 workflow/
 gfpgan/
-models/inswapper_128.onnx
-models/GFPGANv1.4.pth
-*.onnx
-models/DMDNet.pth
 faceswap/
 .vscode/
 switch_states.json
-/models
+
+# Electron / Node
+ui/node_modules/
+ui/out/
+ui/release/
+ui/dist/
+node_modules/
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem

@@ -1,0 +1,153 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════
+   PHANTOM-FACE — PHANTOM DNA Design System
+   Purple glassmorphism aesthetic
+   ═══════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* Core palette */
+  --color-phantom-950: #0a0a0f;
+  --color-phantom-900: #0d0d14;
+  --color-phantom-850: #111118;
+  --color-phantom-800: #16161f;
+  --color-phantom-700: #1e1e2e;
+  --color-phantom-600: #2a2a3d;
+  --color-phantom-500: #3d3d56;
+  --color-phantom-400: #6b6b8a;
+
+  /* Accent — TRON purple */
+  --color-accent-primary: #a855f7;
+  --color-accent-secondary: #7c3aed;
+  --color-accent-tertiary: #c084fc;
+  --color-accent-dim: #6d28d9;
+  --color-accent-glow: rgba(168, 85, 247, 0.4);
+  --color-accent-glow-strong: rgba(168, 85, 247, 0.6);
+
+  /* Semantic */
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  /* Text */
+  --color-text-primary: #f0f0f5;
+  --color-text-secondary: #a0a0b8;
+  --color-text-tertiary: #6b6b8a;
+  --color-text-accent: #c084fc;
+
+  /* Glass */
+  --color-glass-bg: rgba(13, 13, 20, 0.8);
+  --color-glass-border: rgba(168, 85, 247, 0.15);
+  --color-glass-hover: rgba(168, 85, 247, 0.08);
+
+  /* Fonts */
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'Rajdhani', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Spacing */
+  --spacing-panel: 280px;
+  --spacing-titlebar: 36px;
+
+  /* Animation timing */
+  --ease-phantom: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Base styles
+   ═══════════════════════════════════════════════════════════════ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-phantom-950);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Scrollbar — PHANTOM style
+   ═══════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-phantom-600);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Selection
+   ═══════════════════════════════════════════════════════════════ */
+
+::selection {
+  background: rgba(168, 85, 247, 0.3);
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Glass utilities
+   ═══════════════════════════════════════════════════════════════ */
+
+.glass {
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--color-glass-border);
+}
+
+.glass-hover:hover {
+  background: var(--color-glass-hover);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Glow utilities
+   ═══════════════════════════════════════════════════════════════ */
+
+.glow-text {
+  text-shadow: 0 0 10px var(--color-accent-glow),
+               0 0 20px rgba(168, 85, 247, 0.2);
+}
+
+.glow-box {
+  box-shadow: 0 0 15px var(--color-accent-glow),
+              0 0 30px rgba(168, 85, 247, 0.15),
+              inset 0 0 15px rgba(168, 85, 247, 0.05);
+}
+
+.glow-line {
+  box-shadow: 0 0 8px var(--color-accent-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Drag region
+   ═══════════════════════════════════════════════════════════════ */
+
+.drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

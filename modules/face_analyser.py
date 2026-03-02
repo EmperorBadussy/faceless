@@ -18,19 +18,25 @@ FACE_ANALYSER_LOCK = threading.Lock()
 
 
 def get_face_analyser() -> Any:
-    """Get face analyser with thread-safe initialization."""
+    """Get face analyser with thread-safe initialization.
+
+    PHANTOM: Uses quality preset for detection size (320x320 normal, 640x640 high).
+    """
     global FACE_ANALYSER
 
     if FACE_ANALYSER is None:
         with FACE_ANALYSER_LOCK:
-            # Double-check after acquiring lock
             if FACE_ANALYSER is None:
+                cfg = modules.globals.get_preset_config()
+                det_size = cfg.get("det_size", (320, 320))
+
                 FACE_ANALYSER = insightface.app.FaceAnalysis(
                     name='buffalo_l',
                     providers=modules.globals.execution_providers,
                     allowed_modules=['detection', 'recognition']
                 )
-                FACE_ANALYSER.prepare(ctx_id=0, det_size=(320, 320))
+                FACE_ANALYSER.prepare(ctx_id=0, det_size=det_size)
+                print(f"[PHANTOM] Face analyser ready: det_size={det_size}, providers={modules.globals.execution_providers}")
     return FACE_ANALYSER
 
 

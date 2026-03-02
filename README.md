@@ -1,390 +1,224 @@
-<h1 align="center">Deep-Live-Cam 2.0.5c</h1>
+<div align="center">
 
-<p align="center">
-  Real-time face swap and video deepfake with a single click and only a single image.
-</p>
+# PHANTOM FACE
 
-<p align="center">
-<a href="https://trendshift.io/repositories/11395" target="_blank"><img src="https://trendshift.io/api/badge/repositories/11395" alt="hacksider%2FDeep-Live-Cam | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-</p>
+**Real-Time GPU-Accelerated Face Swap Engine**
 
-<p align="center">
-  <img src="media/demo.gif" alt="Demo GIF" width="800">
-</p>
+*High-performance face swapping at 30fps+ with CUDA-optimized pipeline, Electron UI, and virtual camera output*
 
-##  Disclaimer
+[![Python](https://img.shields.io/badge/Python-3.12+-blue?logo=python&logoColor=white)](https://python.org)
+[![Electron](https://img.shields.io/badge/Electron-vite-purple?logo=electron&logoColor=white)](https://electron-vite.org)
+[![CUDA](https://img.shields.io/badge/CUDA-12-green?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![ONNX Runtime](https://img.shields.io/badge/ONNX_Runtime-GPU-orange)](https://onnxruntime.ai)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-red)](LICENSE)
 
-This deepfake software is designed to be a productive tool for the AI-generated media industry. It can assist artists in animating custom characters, creating engaging content, and even using models for clothing design.
+---
 
-We are aware of the potential for unethical applications and are committed to preventative measures. A built-in check prevents the program from processing inappropriate media (nudity, graphic content, sensitive material like war footage, etc.). We will continue to develop this project responsibly, adhering to the law and ethics. We may shut down the project or add watermarks if legally required.
+</div>
 
-- Ethical Use: Users are expected to use this software responsibly and legally. If using a real person's face, obtain their consent and clearly label any output as a deepfake when sharing online.
+## Overview
 
-- Content Restrictions: The software includes built-in checks to prevent processing inappropriate media, such as nudity, graphic content, or sensitive material.
+PHANTOM FACE is a real-time face swap engine built for speed and quality. It combines ONNX Runtime GPU inference with a resolution-decoupled processing pipeline to achieve 30fps+ face swapping on consumer hardware.
 
-- Legal Compliance: We adhere to all relevant laws and ethical guidelines. If legally required, we may shut down the project or add watermarks to the output.
+The system captures at full 1080p, processes face swaps at an optimized lower resolution (854x480), and composites the result back to 1080p -- because the swap model works at 128x128 internally regardless of input size. This eliminates the biggest bottleneck (CPU-side affine warping) while maintaining output quality.
 
-- User Responsibility: We are not responsible for end-user actions. Users must ensure their use of the software aligns with ethical standards and legal requirements.
+### Key Features
 
-By using this software, you agree to these terms and commit to using it in a manner that respects the rights and dignity of others.
+- **Real-time performance** -- 25-30fps on NVIDIA RTX GPUs with CUDA acceleration
+- **Resolution-decoupled pipeline** -- Captures at 1080p, swaps at 480p, outputs at 1080p
+- **Modern Electron UI** -- React 19 + TypeScript + Tailwind CSS with glassmorphism design
+- **WebSocket architecture** -- Decoupled Python backend + Electron frontend
+- **Virtual camera output** -- Feed swapped video to Discord, Zoom, OBS via pyvirtualcam
+- **GPU-accelerated processing** -- ONNX Runtime CUDA EP, OpenCV CUDA where available
+- **Face enhancement** -- Optional GPEN-BFR-256 neural face restoration
+- **Quality presets** -- NORMAL (balanced) and HIGH (maximum quality) modes
+- **Multi-face support** -- Swap multiple faces simultaneously
+- **Post-processing** -- Color correction, mouth masking, sharpening, opacity control
 
-Users are expected to use this software responsibly and legally. If using a real person's face, obtain their consent and clearly label any output as a deepfake when sharing online. We are not responsible for end-user actions.
+## Architecture
 
-## Exclusive v2.6d Quick Start - Pre-built (Windows/Mac Silicon)
-
-  <a href="https://deeplivecam.net/index.php/quickstart"> <img src="media/Download.png" width="285" height="77" />
-
-##### This is the fastest build you can get if you have a discrete NVIDIA or AMD GPU or Mac Silicon, And you'll receive special priority support.
- 
-###### These Pre-builts are perfect for non-technical users or those who don't have time to, or can't manually install all the requirements. Just a heads-up: this is an open-source project, so you can also install it manually. 
-
-## TLDR; Live Deepfake in just 3 Clicks
-![easysteps](https://github.com/user-attachments/assets/af825228-852c-411b-b787-ffd9aac72fc6)
-1. Select a face
-2. Select which camera to use
-3. Press live!
-
-## Features & Uses - Everything is in real-time
-
-### Mouth Mask
-
-**Retain your original mouth for accurate movement using Mouth Mask**
-
-<p align="center">
-  <img src="media/ludwig.gif" alt="resizable-gif">
-</p>
-
-### Face Mapping
-
-**Use different faces on multiple subjects simultaneously**
-
-<p align="center">
-  <img src="media/streamers.gif" alt="face_mapping_source">
-</p>
-
-### Your Movie, Your Face
-
-**Watch movies with any face in real-time**
-
-<p align="center">
-  <img src="media/movie.gif" alt="movie">
-</p>
-
-### Live Show
-
-**Run Live shows and performances**
-
-<p align="center">
-  <img src="media/live_show.gif" alt="show">
-</p>
-
-### Memes
-
-**Create Your Most Viral Meme Yet**
-
-<p align="center">
-  <img src="media/meme.gif" alt="show" width="450"> 
-  <br>
-  <sub>Created using Many Faces feature in Deep-Live-Cam</sub>
-</p>
-
-### Omegle
-
-**Surprise people on Omegle**
-
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/2e9b9b82-fa04-4b70-9f56-b1f68e7672d0" width="450" controls></video>
-</p>
-
-## Installation (Manual)
-
-**Please be aware that the installation requires technical skills and is not for beginners. Consider downloading the quickstart version.**
-
-<details>
-<summary>Click to see the process</summary>
-
-### Installation
-
-This is more likely to work on your computer but will be slower as it utilizes the CPU.
-
-**1. Set up Your Platform**
-
--   Python (3.11 recommended)
--   pip
--   git
--   [ffmpeg](https://www.youtube.com/watch?v=OlNWCpFdVMA) - ```iex (irm ffmpeg.tc.ht)```
--   [Visual Studio 2022 Runtimes (Windows)](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-
-**2. Clone the Repository**
-
-```bash
-git clone https://github.com/hacksider/Deep-Live-Cam.git
-cd Deep-Live-Cam
+```
++-------------------------------------------------------------+
+|                      Electron UI (React)                     |
+|   Source Face | Camera Select | Controls | Live Preview      |
++----------------------------+--------------------------------+
+                             | WebSocket (ws://127.0.0.1:7865)
+                             | JSON control | Binary JPEG frames
++----------------------------+--------------------------------+
+|                    Python WebSocket Server                    |
+|                                                              |
+|  +----------+  +----------+  +------------+  +----------+   |
+|  | Capture  |->| Detect   |->| Processing |->| Display  |   |
+|  | Thread   |  | Thread   |  | Thread     |  | Thread   |   |
+|  | (30fps)  |  | (async)  |  | (swap+enh) |  | (encode) |   |
+|  +----------+  +----------+  +------------+  +----------+   |
+|       |                            |                         |
+|   Camera/OBS                ONNX Runtime                     |
+|   VideoCapture              CUDAExecutionProvider             |
++-------------------------------------------------------------+
 ```
 
-**3. Download the Models**
+**Pipeline flow:**
+1. **Capture thread** grabs frames at 1080p/30fps from the selected camera
+2. **Detection thread** runs face detection (RetinaFace) asynchronously on full-res frames
+3. **Processing thread** downscales to 480p, applies face swap, optional enhancement (GPEN-BFR-256), then upscales back to 1080p
+4. **Display thread** encodes to JPEG and broadcasts to WebSocket clients + virtual camera
 
-1. [GFPGANv1.4](https://huggingface.co/hacksider/deep-live-cam/resolve/main/GFPGANv1.4.onnx)
-2. [inswapper\_128\_fp16.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/inswapper_128_fp16.onnx)
+## Requirements
 
-Place these files in the "**models**" folder.
+### Hardware
+- NVIDIA GPU with CUDA support (RTX series recommended)
+- Webcam or capture device
+- 8GB+ RAM
 
-**4. Install Dependencies**
+### Software
+- Python 3.12+
+- Node.js 20+
+- NVIDIA GPU drivers (latest)
+- OBS Studio (optional, for virtual camera driver)
 
-We highly recommend using a `venv` to avoid issues.
-
-
-For Windows:
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
-For Linux:
-```bash
-# Ensure you use the installed Python 3.10
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-**For macOS:**
-
-Apple Silicon (M1/M2/M3) requires specific setup:
+## Installation
 
 ```bash
-# Install Python 3.11 (specific version is important)
-brew install python@3.11
+# Clone the repository
+git clone https://github.com/EmperorBadussy/phantom-face.git
+cd phantom-face
 
-# Install tkinter package (required for the GUI)
-brew install python-tk@3.10
-
-# Create and activate virtual environment with Python 3.11
-python3.11 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-** In case something goes wrong and you need to reinstall the virtual environment **
-
-```bash
-# Deactivate the virtual environment
-rm -rf venv
-
-# Reinstall the virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# install the dependencies again
+# Install Python dependencies
 pip install -r requirements.txt
 
-# gfpgan and basicsrs issue fix
-pip install git+https://github.com/xinntao/BasicSR.git@master
-pip uninstall gfpgan -y
-pip install git+https://github.com/TencentARC/GFPGAN.git@master
+# Install CUDA support for ONNX Runtime
+pip install onnxruntime-gpu
+
+# Install NVIDIA CUDA pip packages (for GPU acceleration)
+pip install nvidia-cuda-runtime-cu12 nvidia-cublas-cu12 nvidia-cudnn-cu12
+
+# Install Electron UI dependencies
+cd ui
+npm install
+cd ..
 ```
 
-**Run:** If you don't have a GPU, you can run Deep-Live-Cam using `python run.py`. Note that initial execution will download models (~300MB).
+### Model Downloads
 
-### GPU Acceleration
+Download the required models to the `models/` directory:
 
-**CUDA Execution Provider (Nvidia)**
+| Model | Purpose | Size |
+|-------|---------|------|
+| `inswapper_128_fp16.onnx` | Face swap | 277MB |
+| `GPEN-BFR-256.onnx` | Face enhancement (optional) | 76MB |
 
-1. Install [CUDA Toolkit 12.8.0](https://developer.nvidia.com/cuda-12-8-0-download-archive)
-2. Install [cuDNN v8.9.7 for CUDA 12.x](https://developer.nvidia.com/rdp/cudnn-archive) (required for onnxruntime-gpu):
-   - Download cuDNN v8.9.7 for CUDA 12.x
-   - Make sure the cuDNN bin directory is in your system PATH
-3. Install dependencies:
-
-```bash
-pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-pip uninstall onnxruntime onnxruntime-gpu
-pip install onnxruntime-gpu==1.21.0
-```
-
-3. Usage:
-
-```bash
-python run.py --execution-provider cuda
-```
-
-**CoreML Execution Provider (Apple Silicon)**
-
-Apple Silicon (M1/M2/M3) specific installation:
-
-1. Make sure you've completed the macOS setup above using Python 3.10.
-2. Install dependencies:
-
-```bash
-pip uninstall onnxruntime onnxruntime-silicon
-pip install onnxruntime-silicon==1.13.1
-```
-
-3. Usage (important: specify Python 3.10):
-
-```bash
-python3.10 run.py --execution-provider coreml
-```
-
-**Important Notes for macOS:**
-- You **must** use Python 3.10, not newer versions like 3.11 or 3.13
-- Always run with `python3.10` command not just `python` if you have multiple Python versions installed
-- If you get error about `_tkinter` missing, reinstall the tkinter package: `brew reinstall python-tk@3.10`
-- If you get model loading errors, check that your models are in the correct folder
-- If you encounter conflicts with other Python versions, consider uninstalling them:
-  ```bash
-  # List all installed Python versions
-  brew list | grep python
-  
-  # Uninstall conflicting versions if needed
-  brew uninstall --ignore-dependencies python@3.11 python@3.13
-  
-  # Keep only Python 3.11
-  brew cleanup
-  ```
-
-**CoreML Execution Provider (Apple Legacy)**
-
-1. Install dependencies:
-
-```bash
-pip uninstall onnxruntime onnxruntime-coreml
-pip install onnxruntime-coreml==1.21.0
-```
-
-2. Usage:
-
-```bash
-python run.py --execution-provider coreml
-```
-
-**DirectML Execution Provider (Windows)**
-
-1. Install dependencies:
-
-```bash
-pip uninstall onnxruntime onnxruntime-directml
-pip install onnxruntime-directml==1.21.0
-```
-
-2. Usage:
-
-```bash
-python run.py --execution-provider directml
-```
-
-**OpenVINO™ Execution Provider (Intel)**
-
-1. Install dependencies:
-
-```bash
-pip uninstall onnxruntime onnxruntime-openvino
-pip install onnxruntime-openvino==1.21.0
-```
-
-2. Usage:
-
-```bash
-python run.py --execution-provider openvino
-```
-</details>
+The face detection model (`buffalo_l`) is downloaded automatically by InsightFace on first run.
 
 ## Usage
 
-**1. Image/Video Mode**
+### Electron UI (Recommended)
 
--   Execute `python run.py`.
--   Choose a source face image and a target image/video.
--   Click "Start".
--   The output will be saved in a directory named after the target video.
-
-**2. Webcam Mode**
-
--   Execute `python run.py`.
--   Select a source face image.
--   Click "Live".
--   Wait for the preview to appear (10-30 seconds).
--   Use a screen capture tool like OBS to stream.
--   To change the face, select a new source image.
-
-## Command Line Arguments (Unmaintained)
-
-```
-options:
-  -h, --help                                               show this help message and exit
-  -s SOURCE_PATH, --source SOURCE_PATH                     select a source image
-  -t TARGET_PATH, --target TARGET_PATH                     select a target image or video
-  -o OUTPUT_PATH, --output OUTPUT_PATH                     select output file or directory
-  --frame-processor FRAME_PROCESSOR [FRAME_PROCESSOR ...]  frame processors (choices: face_swapper, face_enhancer, ...)
-  --keep-fps                                               keep original fps
-  --keep-audio                                             keep original audio
-  --keep-frames                                            keep temporary frames
-  --many-faces                                             process every face
-  --map-faces                                              map source target faces
-  --mouth-mask                                             mask the mouth region
-  --video-encoder {libx264,libx265,libvpx-vp9}             adjust output video encoder
-  --video-quality [0-51]                                   adjust output video quality
-  --live-mirror                                            the live camera display as you see it in the front-facing camera frame
-  --live-resizable                                         the live camera frame is resizable
-  --max-memory MAX_MEMORY                                  maximum amount of RAM in GB
-  --execution-provider {cpu} [{cpu} ...]                   available execution provider (choices: cpu, ...)
-  --execution-threads EXECUTION_THREADS                    number of execution threads
-  -v, --version                                            show program's version number and exit
+```bash
+cd ui
+npm run dev
 ```
 
-Looking for a CLI mode? Using the -s/--source argument will make the run program in cli mode.
+This launches the Electron app which automatically starts the Python backend server.
 
-## Press
+### Server Only
 
-**We are always open to criticism and are ready to improve, that's why we didn't cherry-pick anything.**
+```bash
+python run.py --server --execution-provider cuda
+```
 
- - [*"Deep-Live-Cam goes viral, allowing anyone to become a digital doppelganger"*](https://arstechnica.com/information-technology/2024/08/new-ai-tool-enables-real-time-face-swapping-on-webcams-raising-fraud-concerns/) - Ars Technica
- - [*"Thanks Deep Live Cam, shapeshifters are among us now"*](https://dataconomy.com/2024/08/15/what-is-deep-live-cam-github-deepfake/) - Dataconomy
- - [*"This free AI tool lets you become anyone during video-calls"*](https://www.newsbytesapp.com/news/science/deep-live-cam-ai-impersonation-tool-goes-viral/story) - NewsBytes
- - [*"OK, this viral AI live stream software is truly terrifying"*](https://www.creativebloq.com/ai/ok-this-viral-ai-live-stream-software-is-truly-terrifying) - Creative Bloq
- - [*"Deepfake AI Tool Lets You Become Anyone in a Video Call With Single Photo"*](https://petapixel.com/2024/08/14/deep-live-cam-deepfake-ai-tool-lets-you-become-anyone-in-a-video-call-with-single-photo-mark-zuckerberg-jd-vance-elon-musk/) - PetaPixel
- - [*"Deep-Live-Cam Uses AI to Transform Your Face in Real-Time, Celebrities Included"*](https://www.techeblog.com/deep-live-cam-ai-transform-face/) - TechEBlog
- - [*"An AI tool that "makes you look like anyone" during a video call is going viral online"*](https://telegrafi.com/en/a-tool-that-makes-you-look-like-anyone-during-a-video-call-is-going-viral-on-the-Internet/) - Telegrafi
- - [*"This Deepfake Tool Turning Images Into Livestreams is Topping the GitHub Charts"*](https://decrypt.co/244565/this-deepfake-tool-turning-images-into-livestreams-is-topping-the-github-charts) - Emerge
- - [*"New Real-Time Face-Swapping AI Allows Anyone to Mimic Famous Faces"*](https://www.digitalmusicnews.com/2024/08/15/face-swapping-ai-real-time-mimic/) - Digital Music News
- - [*"This real-time webcam deepfake tool raises alarms about the future of identity theft"*](https://www.diyphotography.net/this-real-time-webcam-deepfake-tool-raises-alarms-about-the-future-of-identity-theft/) - DIYPhotography
- - [*"That's Crazy, Oh God. That's Fucking Freaky Dude... That's So Wild Dude"*](https://www.youtube.com/watch?time_continue=1074&v=py4Tc-Y8BcY) - SomeOrdinaryGamers
- - [*"Alright look look look, now look chat, we can do any face we want to look like chat"*](https://www.youtube.com/live/mFsCe7AIxq8?feature=shared&t=2686) - IShowSpeed
- - [*"They do a pretty good job matching poses, expression and even the lighting"*](https://www.youtube.com/watch?v=wnCghLjqv3s&t=551s) - TechLinked (LTT)
- - [*"Als Sean Connery an der Redaktionskonferenz teilnahm"*](https://www.golem.de/news/deepfakes-als-sean-connery-an-der-redaktionskonferenz-teilnahm-2408-188172.html) - Golem.de (German)
- - [*"What the F***! Why do I look like Vinny Jr? I look exactly like Vinny Jr!? No, this shit is crazy! Bro This is F*** Crazy! "*](https://youtu.be/JbUPRmXRUtE?t=3964) - IShowSpeed
+Then connect any WebSocket client to `ws://127.0.0.1:7865`.
 
+### Controls
 
-## Credits
+| Control | Description |
+|---------|-------------|
+| **Source Face** | Select an image containing the face to swap onto targets |
+| **Camera** | Select input camera device |
+| **Quality Preset** | NORMAL (30fps balanced) or HIGH (max quality) |
+| **Many Faces** | Swap all detected faces vs. just the primary one |
+| **GPEN 256** | Enable neural face enhancement (adds ~5ms) |
+| **Color Correction** | Match swapped face color to target |
+| **Mouth Mask** | Preserve original mouth for better lip sync |
+| **Sharpness** | Post-swap sharpening amount |
+| **Opacity** | Blend between original and swapped face |
+| **Virtual Camera** | Output to OBS Virtual Camera for use in other apps |
 
--   [ffmpeg](https://ffmpeg.org/): for making video-related operations easy
--   [Henry](https://github.com/henryruhs): One of the major contributor in this repo
--   [deepinsight](https://github.com/deepinsight): for their [insightface](https://github.com/deepinsight/insightface) project which provided a well-made library and models. Please be reminded that the [use of the model is for non-commercial research purposes only](https://github.com/deepinsight/insightface?tab=readme-ov-file#license).
--   [havok2-htwo](https://github.com/havok2-htwo): for sharing the code for webcam
--   [GosuDRM](https://github.com/GosuDRM): for the open version of roop
--   [pereiraroland26](https://github.com/pereiraroland26): Multiple faces support
--   [vic4key](https://github.com/vic4key): For supporting/contributing to this project
--   [kier007](https://github.com/kier007): for improving the user experience
--   [qitianai](https://github.com/qitianai): for multi-lingual support
--   [laurigates](https://github.com/laurigates): Decoupling stuffs to make everything faster!
--   and [all developers](https://github.com/hacksider/Deep-Live-Cam/graphs/contributors) behind libraries used in this project.
--   Footnote: Please be informed that the base author of the code is [s0md3v](https://github.com/s0md3v/roop)
--   All the wonderful users who helped make this project go viral by starring the repo ❤️
+## Performance
 
-[![Stargazers](https://reporoster.com/stars/hacksider/Deep-Live-Cam)](https://github.com/hacksider/Deep-Live-Cam/stargazers)
+Benchmarked with RTX GPU and 1080p webcam input:
 
-## Contributions
+| Stage | Time | Notes |
+|-------|------|-------|
+| Camera capture | ~2ms | 1920x1080 @ 30fps |
+| Face detection | ~3-5ms | RetinaFace via ONNX CUDA |
+| Downscale to 480p | <1ms | cv2.resize INTER_AREA |
+| Face swap (inswapper) | ~5ms | 128x128 model, CUDA EP |
+| Face enhance (GPEN-256) | ~5ms | 256x256 model, CUDA EP |
+| Upscale to 1080p | <1ms | cv2.resize INTER_LINEAR |
+| JPEG encode + send | ~3ms | Quality 65, max 960px wide |
+| **Total pipeline** | **~20-30ms** | **30-50fps effective** |
 
-![Alt](https://repobeats.axiom.co/api/embed/fec8e29c45dfdb9c5916f3a7830e1249308d20e1.svg "Repobeats analytics image")
+### Resolution vs. Performance
 
-## Stars to the Moon 🚀
+The processing resolution can be tuned for your hardware:
 
-<a href="https://star-history.com/#hacksider/deep-live-cam&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=hacksider/deep-live-cam&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=hacksider/deep-live-cam&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=hacksider/deep-live-cam&type=Date" />
- </picture>
-</a>
+| Process Resolution | Swap Time | Effective FPS |
+|-------------------|-----------|---------------|
+| 1920x1080 | ~98ms | ~10fps |
+| 1280x720 | ~44ms | ~23fps |
+| 960x540 | ~37ms | ~27fps |
+| **854x480 (default)** | **~32ms** | **~31fps** |
+| 640x360 | ~19ms | ~52fps |
+
+## Tech Stack
+
+**Backend:**
+- Python 3.12
+- ONNX Runtime (CUDA Execution Provider)
+- InsightFace (face detection + analysis)
+- OpenCV (image processing, camera capture)
+- websockets (async WebSocket server)
+- pyvirtualcam (virtual camera output)
+
+**Frontend:**
+- Electron + electron-vite
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- Zustand (state management)
+
+## Project Structure
+
+```
+phantom-face/
+├── run.py                  # Entry point (CUDA DLL setup + launch)
+├── modules/
+│   ├── server.py           # WebSocket server + camera enumeration
+│   ├── live_pipeline.py    # 4-thread capture/detect/process/display pipeline
+│   ├── face_analyser.py    # InsightFace face detection wrapper
+│   ├── globals.py          # Global settings + quality presets
+│   ├── gpu_processing.py   # OpenCV CUDA wrappers
+│   └── processors/frame/
+│       ├── face_swapper.py          # Face swap + post-processing
+│       ├── face_enhancer_gpen256.py # GPEN-BFR-256 face enhancement
+│       └── _onnx_enhancer.py        # Shared ONNX enhancer utilities
+├── ui/
+│   ├── src/main/           # Electron main process
+│   ├── src/preload/        # Context bridge
+│   └── src/renderer/       # React UI
+│       ├── components/     # Controls, preview, settings panels
+│       ├── lib/hooks/      # WebSocket hook
+│       └── lib/stores/     # Zustand state stores
+└── models/                 # ONNX models (not tracked in git)
+```
+
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 -- see the [LICENSE](LICENSE) file for details.
+
+Based on [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam).
+
+## Disclaimer
+
+This software is intended for educational and research purposes. Users are responsible for ensuring their use complies with all applicable laws and regulations. The developers do not condone the use of this software for deceptive, harmful, or illegal purposes.
