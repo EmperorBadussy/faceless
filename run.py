@@ -29,7 +29,7 @@ if __name__ == '__main__':
             sys.exit(1)
         core.limit_resources()
 
-        print("[PHANTOM] Starting WebSocket server mode...")
+        print("[FACELESS] Starting WebSocket server mode...")
         from modules.server import main as server_main
         server_main()
     else:

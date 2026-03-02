@@ -1,5 +1,5 @@
 /**
- * PHANTOM-FACE — WebSocket lifecycle hook.
+ * FACELESS — WebSocket lifecycle hook.
  *
  * Connects to Python backend, handles reconnect, routes messages.
  * Binary messages (JPEG frames) go to a callback ref.

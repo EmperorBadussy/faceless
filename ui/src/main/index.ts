@@ -1,5 +1,5 @@
 /**
- * PHANTOM-FACE — Electron main process.
+ * FACELESS — Electron main process.
  *
  * Frameless window with custom titlebar.
  * Spawns Python WebSocket server as child process.
@@ -58,7 +58,7 @@ function createWindow(): void {
 // ── App Lifecycle ──────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.phantom.face')
+  electronApp.setAppUserModelId('com.faceless.app')
 
   // Dev: open devtools with F12
   app.on('browser-window-created', (_, window) => {

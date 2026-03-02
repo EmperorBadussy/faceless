@@ -1107,7 +1107,7 @@ def _processing_thread_func(capture_queue, processed_queue, stop_event,
                 cached_many_faces = detection_result.get('many_faces')
 
             for frame_processor in frame_processors:
-                if frame_processor.NAME in ("DLC.FACE-ENHANCER", "PHANTOM.FACE-ENHANCER"):
+                if frame_processor.NAME in ("DLC.FACE-ENHANCER", "FACELESS.FACE-ENHANCER"):
                     if modules.globals.fp_ui["face_enhancer"]:
                         temp_frame = frame_processor.process_frame(None, temp_frame)
                 elif frame_processor.NAME == "DLC.FACE-ENHANCER-GPEN256":
@@ -1116,7 +1116,7 @@ def _processing_thread_func(capture_queue, processed_queue, stop_event,
                 elif frame_processor.NAME == "DLC.FACE-ENHANCER-GPEN512":
                     if modules.globals.fp_ui.get("face_enhancer_gpen512", False):
                         temp_frame = frame_processor.process_frame(None, temp_frame)
-                elif frame_processor.NAME in ("DLC.FACE-SWAPPER", "PHANTOM.FACE-SWAPPER"):
+                elif frame_processor.NAME in ("DLC.FACE-SWAPPER", "FACELESS.FACE-SWAPPER"):
                     # Use cached face positions from detection thread
                     swapped_bboxes = []
                     if modules.globals.many_faces and cached_many_faces:
@@ -1137,7 +1137,7 @@ def _processing_thread_func(capture_queue, processed_queue, stop_event,
         else:
             modules.globals.target_path = None
             for frame_processor in frame_processors:
-                if frame_processor.NAME in ("DLC.FACE-ENHANCER", "PHANTOM.FACE-ENHANCER"):
+                if frame_processor.NAME in ("DLC.FACE-ENHANCER", "FACELESS.FACE-ENHANCER"):
                     if modules.globals.fp_ui["face_enhancer"]:
                         temp_frame = frame_processor.process_frame_v2(temp_frame)
                 elif frame_processor.NAME in ("DLC.FACE-ENHANCER-GPEN256", "DLC.FACE-ENHANCER-GPEN512"):
@@ -1253,7 +1253,7 @@ def create_webcam_preview(camera_index: int):
             ROOT.after(16, _display_next_frame)
             return
 
-        # PHANTOM FIX: Original had 5 redundant transforms here:
+        # FIX: Original had 5 redundant transforms here:
         #   1. fit_image_to_size (resize)
         #   2. gpu_cvt_color (BGR→RGB)
         #   3. Image.fromarray (numpy→PIL copy)
@@ -1268,7 +1268,7 @@ def create_webcam_preview(camera_index: int):
 
         image = gpu_cvt_color(temp_frame, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(image)
-        # PHANTOM: Removed redundant ImageOps.contain LANCZOS resize
+        # Removed redundant ImageOps.contain LANCZOS resize
         # (fit_image_to_size already resized to the target dimensions)
         image = ctk.CTkImage(image, size=(temp_frame.shape[1], temp_frame.shape[0]))
         preview_label.configure(image=image)

@@ -1,5 +1,5 @@
 /**
- * PHANTOM-FACE — IPC handlers for window controls and file dialogs.
+ * FACELESS — IPC handlers for window controls and file dialogs.
  */
 
 import { ipcMain, BrowserWindow, dialog, app } from 'electron'

@@ -1,4 +1,4 @@
-"""PHANTOM-FACE video capturer with connection pooling.
+"""FACELESS video capturer with connection pooling.
 
 Original opened/closed cv2.VideoCapture for EVERY frame seek (slider preview).
 We now cache the capture object per video path and reuse it.

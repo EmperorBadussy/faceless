@@ -17,7 +17,7 @@ export function SettingsPanel() {
   const setControl = useControlsStore((s) => s.setControl)
 
   const handleSelectFace = async () => {
-    const path = await window.phantomFace.openImageDialog()
+    const path = await window.faceless.openImageDialog()
     if (path) {
       sendJson({ type: 'set_source', path })
     }

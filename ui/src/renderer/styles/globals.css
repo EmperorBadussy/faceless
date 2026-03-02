@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════
-   PHANTOM-FACE — PHANTOM DNA Design System
+   FACELESS — FACELESS Design System
    Purple glassmorphism aesthetic
    ═══════════════════════════════════════════════════════════════ */
 
@@ -75,7 +75,7 @@ html, body, #root {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Scrollbar — PHANTOM style
+   Scrollbar — FACELESS style
    ═══════════════════════════════════════════════════════════════ */
 
 ::-webkit-scrollbar {

@@ -1,8 +1,8 @@
 /**
- * PHANTOM-FACE — Preload API type definitions.
+ * FACELESS — Preload API type definitions.
  */
 
-export interface PhantomFaceAPI {
+export interface FacelessAPI {
   // Window controls
   windowMinimize: () => void
   windowMaximize: () => void
@@ -18,6 +18,6 @@ export interface PhantomFaceAPI {
 
 declare global {
   interface Window {
-    phantomFace: PhantomFaceAPI
+    faceless: FacelessAPI
   }
 }

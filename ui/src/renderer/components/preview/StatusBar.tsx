@@ -31,7 +31,7 @@ export function StatusBar() {
           <span className="text-text-tertiary">{lastMessage}</span>
         )}
         <span className="text-text-tertiary font-[JetBrains_Mono] text-[10px]">
-          PHANTOM-FACE v1.0.0
+          FACELESS v1.0.0
         </span>
       </div>
     </div>

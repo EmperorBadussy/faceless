@@ -1,4 +1,4 @@
-"""PHANTOM-FACE live webcam pipeline.
+"""FACELESS live webcam pipeline.
 
 Optimized architecture for real-time face swapping:
 
@@ -167,7 +167,7 @@ class LivePipeline:
             cap = cv2.VideoCapture(camera_index)
 
         if not cap or not cap.isOpened():
-            print("[PHANTOM] Failed to open camera")
+            print("[FACELESS] Failed to open camera")
             return
 
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -179,7 +179,7 @@ class LivePipeline:
         actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         actual_fps = cap.get(cv2.CAP_PROP_FPS)
-        print(f"[PHANTOM] Camera: {actual_w}x{actual_h} @ {actual_fps:.0f}fps")
+        print(f"[FACELESS] Camera: {actual_w}x{actual_h} @ {actual_fps:.0f}fps")
 
         frame_count = 0
         t0 = time.time()

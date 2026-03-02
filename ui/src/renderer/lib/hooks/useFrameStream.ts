@@ -1,5 +1,5 @@
 /**
- * PHANTOM-FACE — Frame stream hook.
+ * FACELESS — Frame stream hook.
  *
  * Receives binary WebSocket messages (JPEG blobs), creates Blob URLs,
  * and updates an <img> element's src directly via ref (no React re-render).

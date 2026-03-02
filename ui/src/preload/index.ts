@@ -1,13 +1,13 @@
 /**
- * PHANTOM-FACE — Preload script.
+ * FACELESS — Preload script.
  *
- * Exposes `window.phantomFace` API to the renderer via context bridge.
+ * Exposes `window.faceless` API to the renderer via context bridge.
  */
 
 import { contextBridge, ipcRenderer } from 'electron'
-import type { PhantomFaceAPI } from './types'
+import type { FacelessAPI } from './types'
 
-const api: PhantomFaceAPI = {
+const api: FacelessAPI = {
   // Window controls
   windowMinimize: () => ipcRenderer.send('window:minimize'),
   windowMaximize: () => ipcRenderer.send('window:maximize'),
@@ -21,4 +21,4 @@ const api: PhantomFaceAPI = {
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
 }
 
-contextBridge.exposeInMainWorld('phantomFace', api)
+contextBridge.exposeInMainWorld('faceless', api)

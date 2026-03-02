@@ -1,5 +1,5 @@
 /**
- * PHANTOM-FACE — Controls state (Zustand).
+ * FACELESS — Controls state (Zustand).
  *
  * All toggles, sliders, camera selection, source face state.
  */

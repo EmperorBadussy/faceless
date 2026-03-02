@@ -1,4 +1,4 @@
-"""PHANTOM-FACE WebSocket server.
+"""FACELESS WebSocket server.
 
 Wraps LivePipeline for the Electron UI. Runs on 127.0.0.1:7865.
 
@@ -130,7 +130,7 @@ def apply_control(key: str, value) -> None:
                 import threading
                 threading.Thread(target=get_enhancer, daemon=True).start()
             except Exception as e:
-                print(f"[PHANTOM] GPEN-256 preload error: {e}")
+                print(f"[FACELESS] GPEN-256 preload error: {e}")
     elif key in FLOAT_CONTROLS:
         setattr(modules.globals, FLOAT_CONTROLS[key], float(value))
     elif key == "quality_preset":
@@ -164,7 +164,7 @@ def make_thumbnail(frame: np.ndarray, max_size: int = 128) -> str:
 # ── WebSocket Server ────────────────────────────────────────────────────────
 
 class PhantomServer:
-    """Async WebSocket server for PHANTOM-FACE."""
+    """Async WebSocket server for FACELESS."""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 7865):
         self.host = host
@@ -180,7 +180,7 @@ class PhantomServer:
     async def handler(self, ws: ServerConnection) -> None:
         """Handle a single WebSocket connection."""
         self.clients.add(ws)
-        print(f"[PHANTOM] Client connected ({len(self.clients)} total)")
+        print(f"[FACELESS] Client connected ({len(self.clients)} total)")
 
         try:
             # Send initial state
@@ -196,7 +196,7 @@ class PhantomServer:
             pass
         finally:
             self.clients.discard(ws)
-            print(f"[PHANTOM] Client disconnected ({len(self.clients)} total)")
+            print(f"[FACELESS] Client disconnected ({len(self.clients)} total)")
 
             # Stop streaming if no clients
             if not self.clients:
@@ -205,7 +205,7 @@ class PhantomServer:
     async def _handle_json(self, ws: ServerConnection, msg: dict) -> None:
         """Dispatch a JSON message from the client."""
         msg_type = msg.get("type", "")
-        print(f"[PHANTOM] recv {msg_type}")
+        print(f"[FACELESS] recv {msg_type}")
 
         if msg_type == "get_state":
             await ws.send(json.dumps({
@@ -248,7 +248,7 @@ class PhantomServer:
 
     async def _set_source(self, ws: ServerConnection, path: str) -> None:
         """Load source face image and cache embedding."""
-        print(f"[PHANTOM] _set_source: path={path}")
+        print(f"[FACELESS] _set_source: path={path}")
         if not path:
             modules.globals.source_path = None
             self._pipeline.set_source_face(None)
@@ -268,15 +268,15 @@ class PhantomServer:
                 }))
                 return
 
-            print(f"[PHANTOM] Image loaded ({img.shape}), detecting face...")
+            print(f"[FACELESS] Image loaded ({img.shape}), detecting face...")
             face = await asyncio.to_thread(get_one_face, img)
-            print(f"[PHANTOM] Face detection result: {'found' if face is not None else 'none'}")
+            print(f"[FACELESS] Face detection result: {'found' if face is not None else 'none'}")
 
             if face is None:
                 modules.globals.source_path = path
                 self._pipeline.set_source_face(None)
                 thumb = make_thumbnail(img)
-                print(f"[PHANTOM] Sending source_face (no face), thumbnail len={len(thumb)}")
+                print(f"[FACELESS] Sending source_face (no face), thumbnail len={len(thumb)}")
                 await self._broadcast(json.dumps({
                     "type": "source_face",
                     "detected": False,
@@ -293,7 +293,7 @@ class PhantomServer:
             modules.globals.cached_source_face = face
 
             thumb = make_thumbnail(img)
-            print(f"[PHANTOM] Sending source_face (detected), thumbnail len={len(thumb)}, clients={len(self.clients)}")
+            print(f"[FACELESS] Sending source_face (detected), thumbnail len={len(thumb)}, clients={len(self.clients)}")
             await self._broadcast(json.dumps({
                 "type": "source_face",
                 "detected": True,
@@ -305,7 +305,7 @@ class PhantomServer:
             }))
 
         except Exception as e:
-            print(f"[PHANTOM] _set_source error: {e}")
+            print(f"[FACELESS] _set_source error: {e}")
             await self._broadcast(json.dumps({
                 "type": "error",
                 "message": str(e),
@@ -331,7 +331,7 @@ class PhantomServer:
 
         camera_ok = await asyncio.to_thread(check_camera, camera_index)
         if not camera_ok:
-            print(f"[PHANTOM] Camera {camera_index} not available")
+            print(f"[FACELESS] Camera {camera_index} not available")
             await self._broadcast(json.dumps({
                 "type": "error",
                 "message": f"Camera {camera_index} not available. Is it plugged in?",
@@ -404,13 +404,13 @@ class PhantomServer:
             try:
                 self._vcam = pyvirtualcam.Camera(width=1920, height=1080, fps=30, print_fps=False)
                 self._vcam_enabled = True
-                print(f"[PHANTOM] Virtual camera started: {self._vcam.device}")
+                print(f"[FACELESS] Virtual camera started: {self._vcam.device}")
                 await self._broadcast(json.dumps({
                     "type": "status",
                     "message": f"Virtual camera active: {self._vcam.device}",
                 }))
             except Exception as e:
-                print(f"[PHANTOM] Virtual camera error: {e}")
+                print(f"[FACELESS] Virtual camera error: {e}")
                 await self._broadcast(json.dumps({
                     "type": "error",
                     "message": f"Virtual camera failed: {e}. Install OBS for the driver.",
@@ -423,7 +423,7 @@ class PhantomServer:
                 except Exception:
                     pass
                 self._vcam = None
-            print("[PHANTOM] Virtual camera stopped")
+            print("[FACELESS] Virtual camera stopped")
             await self._broadcast(json.dumps({
                 "type": "status",
                 "message": "Virtual camera stopped",
@@ -484,10 +484,10 @@ class PhantomServer:
 
     async def run(self) -> None:
         """Start the WebSocket server."""
-        print(f"[PHANTOM] WebSocket server starting on ws://{self.host}:{self.port}")
+        print(f"[FACELESS] WebSocket server starting on ws://{self.host}:{self.port}")
 
         async with serve(self.handler, self.host, self.port) as server:
-            print(f"[PHANTOM] Server ready — ws://{self.host}:{self.port}")
+            print(f"[FACELESS] Server ready — ws://{self.host}:{self.port}")
             await asyncio.Future()  # Run forever
 
 
@@ -497,7 +497,7 @@ def main() -> None:
     try:
         asyncio.run(server.run())
     except KeyboardInterrupt:
-        print("\n[PHANTOM] Server stopped")
+        print("\n[FACELESS] Server stopped")
 
 
 if __name__ == "__main__":

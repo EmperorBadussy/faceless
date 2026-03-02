@@ -1,4 +1,4 @@
-"""PHANTOM-FACE global configuration.
+"""FACELESS global configuration.
 
 Quality presets:
   NORMAL  — ~6-8 GB VRAM, balanced FPS/quality (good for streaming + gaming)

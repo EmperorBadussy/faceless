@@ -20,7 +20,7 @@ FACE_ANALYSER_LOCK = threading.Lock()
 def get_face_analyser() -> Any:
     """Get face analyser with thread-safe initialization.
 
-    PHANTOM: Uses quality preset for detection size (320x320 normal, 640x640 high).
+    FACELESS: Uses quality preset for detection size (320x320 normal, 640x640 high).
     """
     global FACE_ANALYSER
 
@@ -36,7 +36,7 @@ def get_face_analyser() -> Any:
                     allowed_modules=['detection', 'recognition']
                 )
                 FACE_ANALYSER.prepare(ctx_id=0, det_size=det_size)
-                print(f"[PHANTOM] Face analyser ready: det_size={det_size}, providers={modules.globals.execution_providers}")
+                print(f"[FACELESS] Face analyser ready: det_size={det_size}, providers={modules.globals.execution_providers}")
     return FACE_ANALYSER
 
 

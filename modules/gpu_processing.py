@@ -1,4 +1,4 @@
-"""PHANTOM-FACE GPU-accelerated image processing.
+"""FACELESS GPU-accelerated image processing.
 
 Rewrite of the original gpu_processing.py with:
   - Persistent GpuMat objects (no per-call upload/download)
@@ -38,12 +38,12 @@ try:
     if _has_gauss and _has_resize and _has_cvt:
         CUDA_AVAILABLE = True
         _CUDA_STREAM = cv2.cuda.Stream_Null()
-        print("[PHANTOM-GPU] OpenCV CUDA detected — GPU acceleration enabled")
+        print("[FACELESS-GPU] OpenCV CUDA detected — GPU acceleration enabled")
     else:
         missing = [n for n, f in [("createGaussianFilter", _has_gauss), ("resize", _has_resize), ("cvtColor", _has_cvt)] if not f]
-        print(f"[PHANTOM-GPU] CUDA partial — missing: {', '.join(missing)}, using CPU")
+        print(f"[FACELESS-GPU] CUDA partial — missing: {', '.join(missing)}, using CPU")
 except Exception:
-    print("[PHANTOM-GPU] OpenCV CUDA not available — CPU mode")
+    print("[FACELESS-GPU] OpenCV CUDA not available — CPU mode")
 
 
 # ── Filter Cache ─────────────────────────────────────────────────────────────

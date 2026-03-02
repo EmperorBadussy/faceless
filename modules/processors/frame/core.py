@@ -1,4 +1,4 @@
-"""PHANTOM-FACE frame processor core.
+"""FACELESS frame processor core.
 
 Changes from original:
   - Keeps ThreadPoolExecutor for ONNX inference (ONNX releases GIL in C++)
@@ -37,10 +37,10 @@ def load_frame_processor_module(frame_processor: str) -> Any:
         frame_processor_module = importlib.import_module(f'modules.processors.frame.{frame_processor}')
         for method_name in FRAME_PROCESSORS_INTERFACE:
             if not hasattr(frame_processor_module, method_name):
-                print(f"[PHANTOM] Frame processor {frame_processor} missing method {method_name}")
+                print(f"[FACELESS] Frame processor {frame_processor} missing method {method_name}")
                 sys.exit()
     except ImportError:
-        print(f"[PHANTOM] Frame processor {frame_processor} not found")
+        print(f"[FACELESS] Frame processor {frame_processor} not found")
         sys.exit()
     return frame_processor_module
 
@@ -68,7 +68,7 @@ def set_frame_processors_modules_from_ui(frame_processors: List[str]) -> None:
                 if frame_processor not in modules.globals.frame_processors:
                     modules.globals.frame_processors.append(frame_processor)
             except (SystemExit, Exception) as e:
-                print(f"[PHANTOM] Warning: Failed to load {frame_processor}: {e}")
+                print(f"[FACELESS] Warning: Failed to load {frame_processor}: {e}")
         elif not state and frame_processor in current_processor_names:
             try:
                 module_to_remove = next(
@@ -80,7 +80,7 @@ def set_frame_processors_modules_from_ui(frame_processors: List[str]) -> None:
                 if frame_processor in modules.globals.frame_processors:
                     modules.globals.frame_processors.remove(frame_processor)
             except Exception as e:
-                print(f"[PHANTOM] Warning: Error removing {frame_processor}: {e}")
+                print(f"[FACELESS] Warning: Error removing {frame_processor}: {e}")
 
 
 def multi_process_frame(
@@ -110,7 +110,7 @@ def multi_process_frame(
             try:
                 future.result()
             except Exception as e:
-                print(f"[PHANTOM] Error processing {futures[future]}: {e}")
+                print(f"[FACELESS] Error processing {futures[future]}: {e}")
 
 
 def process_video(source_path: str, frame_paths: list[str], process_frames: Callable[[str, List[str], Any], None]) -> None:

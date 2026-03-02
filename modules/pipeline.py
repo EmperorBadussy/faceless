@@ -1,4 +1,4 @@
-"""PHANTOM-FACE zero-copy video processing pipeline.
+"""FACELESS zero-copy video processing pipeline.
 
 Replaces the original disk-based pipeline (extract PNGs → read → process → write → re-encode)
 with in-memory ffmpeg pipes. Frames flow through RAM only — zero disk I/O for temp frames.

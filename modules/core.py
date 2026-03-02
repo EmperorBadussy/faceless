@@ -1,4 +1,4 @@
-"""PHANTOM-FACE core orchestrator.
+"""FACELESS core orchestrator.
 
 Changes from Deep-Live-Cam:
   - TensorFlow is LAZY-loaded (only when NSFW filter is enabled) — saves 200-500MB RAM + 2-5s startup
@@ -65,7 +65,7 @@ if HAS_TORCH:
 def parse_args() -> None:
     signal.signal(signal.SIGINT, lambda signal_number, frame: destroy())
     program = argparse.ArgumentParser(
-        prog="PHANTOM-FACE",
+        prog="FACELESS",
         description="Real-time face swap — optimized fork of Deep-Live-Cam",
     )
     program.add_argument('-s', '--source', help='source face image', dest='source_path')
@@ -94,7 +94,7 @@ def parse_args() -> None:
     program.add_argument('--execution-threads', help='execution threads', dest='execution_threads', type=int,
                          default=suggest_execution_threads())
     program.add_argument('--show-fps', help='show FPS overlay', dest='show_fps', action='store_true', default=False)
-    program.add_argument('-v', '--version', action='version', version=f'PHANTOM-FACE {modules.metadata.version}')
+    program.add_argument('-v', '--version', action='version', version=f'FACELESS {modules.metadata.version}')
 
     # Deprecated args
     program.add_argument('-f', '--face', help=argparse.SUPPRESS, dest='source_path_deprecated')
@@ -226,7 +226,7 @@ def pre_check() -> bool:
     return True
 
 
-def update_status(message: str, scope: str = 'PHANTOM') -> None:
+def update_status(message: str, scope: str = 'FACELESS') -> None:
     print(f'[{scope}] {message}')
     if not modules.globals.headless:
         try:

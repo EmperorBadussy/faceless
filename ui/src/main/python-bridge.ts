@@ -1,5 +1,5 @@
 /**
- * PHANTOM-FACE — Python child process management.
+ * FACELESS — Python child process management.
  *
  * Spawns `python run.py --server --execution-provider cuda`
  * and monitors stdout for the "Server ready" line.

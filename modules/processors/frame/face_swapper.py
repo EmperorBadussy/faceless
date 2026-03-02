@@ -1,10 +1,10 @@
-"""PHANTOM-FACE face swapper — optimized.
+"""FACELESS face swapper — optimized.
 
 Key changes from Deep-Live-Cam:
   - Face mask computed ONCE per face (was computed 2x when mouth_mask + poisson_blend)
   - Eliminated 5-7 unnecessary .copy() calls per frame (~10MB/frame saved)
   - Source face cached at selection time (not re-detected in hot path)
-  - NAME updated to PHANTOM branding
+  - NAME updated to FACELESS branding
 """
 
 from typing import Any, List, Optional
@@ -31,7 +31,7 @@ import time
 
 FACE_SWAPPER = None
 THREAD_LOCK = threading.Lock()
-NAME = "PHANTOM.FACE-SWAPPER"
+NAME = "FACELESS.FACE-SWAPPER"
 
 # Interpolation state
 PREVIOUS_FRAME_RESULT = None
@@ -188,7 +188,7 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
         return original_frame # Return original if swap fails
 
     # --- Post-swap Processing (Masking, Opacity, etc.) ---
-    # PHANTOM FIX: Compute face_mask ONCE (original computed it 2x when both options enabled)
+    # FIX: Compute face_mask ONCE (original computed it 2x when both options enabled)
     needs_mask = getattr(modules.globals, "mouth_mask", False) or getattr(modules.globals, "poisson_blend", False)
     face_mask = create_face_mask(target_face, temp_frame) if needs_mask else None
 
@@ -283,10 +283,10 @@ def get_faces_optimized(frame: Frame, use_cache: bool = True) -> Optional[List[F
 
 # --- START: Helper function for interpolation and sharpening ---
 def apply_post_processing(current_frame: Frame, swapped_face_bboxes: List[np.ndarray]) -> Frame:
-    """Applies sharpening and interpolation. PHANTOM: eliminated unnecessary .copy()"""
+    """Applies sharpening and interpolation. FACELESS: eliminated unnecessary .copy()"""
     global PREVIOUS_FRAME_RESULT
 
-    # PHANTOM FIX: Don't copy the entire frame — we modify in-place via slicing
+    # FIX: Don't copy the entire frame — we modify in-place via slicing
     processed_frame = current_frame
 
     # 1. Apply Sharpening (if enabled) with optimized kernel for Apple Silicon
@@ -382,7 +382,7 @@ def process_frame(source_face: Face, temp_frame: Frame) -> Frame:
     if modules.globals.many_faces:
         many_faces = get_many_faces(processed_frame)
         if many_faces:
-            # PHANTOM FIX: swap_face already handles the frame internally, no need to .copy()
+            # FIX: swap_face already handles the frame internally, no need to .copy()
             for target_face in many_faces:
                 processed_frame = swap_face(source_face, target_face, processed_frame)
                 if target_face is not None and hasattr(target_face, "bbox") and target_face.bbox is not None:

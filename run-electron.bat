@@ -1,10 +1,10 @@
 @echo off
-title PHANTOM-FACE
+title FACELESS
 echo.
-echo  ╔═══════════════════════════════════════╗
-echo  ║         PHANTOM-FACE v1.0.0           ║
-echo  ║     Real-time Face Swap Engine        ║
-echo  ╚═══════════════════════════════════════╝
+echo  +=======================================+
+echo  |           FACELESS v1.0.0             |
+echo  |     Real-time Face Swap Engine        |
+echo  +=======================================+
 echo.
 
 :: Check Python
@@ -33,6 +33,6 @@ if not exist "ui\node_modules" (
 )
 
 :: Launch Electron (which spawns Python internally)
-echo [START] Launching PHANTOM-FACE...
+echo [START] Launching FACELESS...
 cd ui
 call npm run dev

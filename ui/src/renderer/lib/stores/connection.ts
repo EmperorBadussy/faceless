@@ -1,5 +1,5 @@
 /**
- * PHANTOM-FACE — Connection state (Zustand).
+ * FACELESS — Connection state (Zustand).
  *
  * Tracks WebSocket status, FPS stats, streaming state.
  */

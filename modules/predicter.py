@@ -1,6 +1,6 @@
-"""PHANTOM-FACE NSFW predicter.
+"""FACELESS NSFW predicter.
 
-PHANTOM: This module is ONLY loaded when --nsfw-filter is used.
+FACELESS: This module is ONLY loaded when --nsfw-filter is used.
 TensorFlow and opennsfw2 are imported lazily, not at startup.
 If you don't use --nsfw-filter, neither TF nor opennsfw2 are loaded.
 """

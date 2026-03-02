@@ -1,4 +1,4 @@
-"""Shared path constants for the Deep-Live-Cam project."""
+"""Shared path constants for the FACELESS project."""
 
 import os
 

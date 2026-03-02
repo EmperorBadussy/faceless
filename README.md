@@ -1,6 +1,6 @@
 <div align="center">
 
-# PHANTOM FACE
+# FACELESS
 
 **Real-Time GPU-Accelerated Face Swap Engine**
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-PHANTOM FACE is a real-time face swap engine built for speed and quality. It combines ONNX Runtime GPU inference with a resolution-decoupled processing pipeline to achieve 30fps+ face swapping on consumer hardware.
+FACELESS is a real-time face swap engine built for speed and quality. It combines ONNX Runtime GPU inference with a resolution-decoupled processing pipeline to achieve 30fps+ face swapping on consumer hardware.
 
 The system captures at full 1080p, processes face swaps at an optimized lower resolution (854x480), and composites the result back to 1080p -- because the swap model works at 128x128 internally regardless of input size. This eliminates the biggest bottleneck (CPU-side affine warping) while maintaining output quality.
 
@@ -81,8 +81,8 @@ The system captures at full 1080p, processes face swaps at an optimized lower re
 
 ```bash
 # Clone the repository
-git clone https://github.com/EmperorBadussy/phantom-face.git
-cd phantom-face
+git clone https://github.com/EmperorBadussy/faceless.git
+cd faceless
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -191,7 +191,7 @@ The processing resolution can be tuned for your hardware:
 ## Project Structure
 
 ```
-phantom-face/
+faceless/
 ├── run.py                  # Entry point (CUDA DLL setup + launch)
 ├── modules/
 │   ├── server.py           # WebSocket server + camera enumeration

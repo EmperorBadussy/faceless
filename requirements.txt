@@ -1,4 +1,4 @@
-# PHANTOM-FACE requirements
+# FACELESS requirements
 # Fork of Deep-Live-Cam with performance optimizations
 
 numpy>=1.23.5,<2

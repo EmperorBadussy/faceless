@@ -1,7 +1,7 @@
 {
-  "name": "phantom-face",
+  "name": "faceless",
   "version": "1.0.0",
-  "description": "PHANTOM-FACE — Real-time Face Swap Engine",
+  "description": "FACELESS — Real-time Face Swap Engine",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -34,8 +34,8 @@
     "vite": "^7.3.1"
   },
   "build": {
-    "appId": "com.phantom.face",
-    "productName": "PHANTOM-FACE",
+    "appId": "com.faceless.app",
+    "productName": "FACELESS",
     "directories": {
       "output": "release"
     },
