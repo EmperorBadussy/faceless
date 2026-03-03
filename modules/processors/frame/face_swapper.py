@@ -208,6 +208,16 @@ def swap_face_gpu(source_face: Face, target_face: Face, temp_frame: Frame) -> Fr
             return temp_frame
         bgr_fake, M = result
 
+        # Color correction: match swapped face color to target skin tone
+        if modules.globals.color_correction and target_face is not None:
+            bbox = target_face.bbox.astype(int)
+            x1, y1 = max(0, bbox[0]), max(0, bbox[1])
+            x2, y2 = min(temp_frame.shape[1], bbox[2]), min(temp_frame.shape[0], bbox[3])
+            if x2 > x1 and y2 > y1:
+                target_crop = temp_frame[y1:y2, x1:x2]
+                target_resized = cv2.resize(target_crop, (bgr_fake.shape[1], bgr_fake.shape[0]))
+                bgr_fake = apply_color_transfer(bgr_fake, target_resized)
+
         h, w = temp_frame.shape[:2]
         crop_size = float(bgr_fake.shape[0])  # 128
 

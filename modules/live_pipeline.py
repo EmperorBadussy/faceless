@@ -28,6 +28,7 @@ import modules.globals
 from modules.gpu_processing import gpu_flip, gpu_resize, gpu_cvt_color, GpuProcessor
 from modules.face_analyser import get_one_face, get_many_faces, detect_one_face, detect_many_faces
 from modules.typing import Face, Frame
+from modules.one_euro_filter import FaceStabilizer
 
 
 class LivePipeline:
@@ -61,6 +62,14 @@ class LivePipeline:
 
         # Frame processors (set externally)
         self._frame_processors: List[Any] = []
+
+        # Detection coast: reuse last valid faces when detection misses
+        self._last_valid_faces: Optional[List[Face]] = None
+        self._coast_frames_remaining: int = 0
+        self._COAST_MAX_FRAMES: int = 5
+
+        # 1-Euro filter for landmark stabilization
+        self._face_stabilizer = FaceStabilizer()
 
     @property
     def process_fps(self) -> float:
@@ -145,6 +154,10 @@ class LivePipeline:
         for t in self._threads:
             t.join(timeout=3.0)
         self._threads.clear()
+        # Reset stabilizer and coast state
+        self._face_stabilizer.reset()
+        self._last_valid_faces = None
+        self._coast_frames_remaining = 0
 
     # ── Capture Thread ───────────────────────────────────────────────────────
 
@@ -240,6 +253,14 @@ class LivePipeline:
                 face = detect_one_face(frame)
                 faces = [face] if face else None
 
+            # Detection coast: reuse last valid faces for up to N frames on miss
+            if faces:
+                self._last_valid_faces = faces
+                self._coast_frames_remaining = self._COAST_MAX_FRAMES
+            elif self._coast_frames_remaining > 0 and self._last_valid_faces:
+                faces = self._last_valid_faces
+                self._coast_frames_remaining -= 1
+
             # Publish results
             with self._detection_lock:
                 self._detected_faces = faces
@@ -263,6 +284,8 @@ class LivePipeline:
         """
         from modules.processors.frame.face_swapper import swap_face_gpu, apply_post_processing
         from modules.processors.frame.face_enhancer_gpen256 import enhance_face as gpen256_enhance
+        from modules.processors.frame.face_enhancer_gpen512 import enhance_face as gpen512_enhance
+        from modules.processors.frame.face_enhancer import enhance_single_face as gfpgan_enhance
         from insightface.app.common import Face
 
         # GPU warp eliminates the CPU resolution bottleneck — process at native res
@@ -317,6 +340,9 @@ class LivePipeline:
                 work_frame = frame
                 scaled_faces = [f for f in cached_faces if f is not None]
 
+            # Stabilize face landmarks with 1-Euro filter (removes jitter)
+            scaled_faces = self._face_stabilizer.update(scaled_faces, time.time())
+
             # Apply face swap(s) at process resolution
             result = work_frame
             swapped_bboxes = []
@@ -329,15 +355,18 @@ class LivePipeline:
             # Post-processing (sharpening, interpolation)
             result = apply_post_processing(result, swapped_bboxes)
 
-            # GPEN-256 face enhancement (runs at process resolution, 256x256 internally)
+            # Face enhancement (runs on already-detected faces — no redundant detection)
             if modules.globals.fp_ui.get("face_enhancer_gpen256", False):
                 for target_face in scaled_faces:
                     result = gpen256_enhance(result, target_face)
 
-            # Apply any additional frame processors (enhancers etc.)
-            for processor in self._frame_processors:
-                if hasattr(processor, 'process_frame'):
-                    result = processor.process_frame(None, result)
+            if modules.globals.fp_ui.get("face_enhancer_gpen512", False):
+                for target_face in scaled_faces:
+                    result = gpen512_enhance(result, target_face)
+
+            if modules.globals.fp_ui.get("face_enhancer", False):
+                for target_face in scaled_faces:
+                    result = gfpgan_enhance(result, target_face)
 
             # Paste swapped face regions onto original 1080p frame
             # instead of upscaling the entire 480p result (keeps background sharp)

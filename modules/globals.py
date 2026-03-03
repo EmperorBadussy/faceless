@@ -140,6 +140,11 @@ interpolation_weight: float = 0
 cached_source_face: Any = None
 cached_source_embedding: Any = None
 
+# ── Multi-Source Embedding Averaging ─────────────────────────────────────────
+
+source_embeddings: list = []
+averaged_embedding: Any = None
+
 def apply_preset(preset: QualityPreset) -> None:
     """Apply a quality preset, updating relevant globals."""
     global quality_preset, poisson_blend, sharpness, interpolation_weight, enable_interpolation

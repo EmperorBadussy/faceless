@@ -39,6 +39,15 @@ from modules.globals import QualityPreset
 from modules.live_pipeline import get_pipeline
 from modules.face_analyser import get_one_face
 
+# FFHQ 5-point template (normalized to [0,1], scaled at use time)
+_FFHQ_TEMPLATE = np.array([
+    [0.31556875, 0.4615741],
+    [0.68262291, 0.4615741],
+    [0.50009375, 0.6405054],
+    [0.34947187, 0.8246919],
+    [0.65343645, 0.8246919],
+], dtype=np.float32)
+
 try:
     import pyvirtualcam
     HAS_VCAM = True
@@ -123,14 +132,27 @@ def apply_control(key: str, value) -> None:
         setattr(modules.globals, BOOL_CONTROLS[key], bool(value))
     elif key in FP_UI_CONTROLS:
         modules.globals.fp_ui[key] = bool(value)
-        # Preload GPEN-256 model on toggle-on so first frame isn't laggy
-        if key == "face_enhancer_gpen256" and bool(value):
-            try:
-                from modules.processors.frame.face_enhancer_gpen256 import get_enhancer
-                import threading
-                threading.Thread(target=get_enhancer, daemon=True).start()
-            except Exception as e:
-                print(f"[FACELESS] GPEN-256 preload error: {e}")
+        # Preload model on toggle-on so first frame isn't laggy
+        if bool(value):
+            import threading
+            if key == "face_enhancer_gpen256":
+                try:
+                    from modules.processors.frame.face_enhancer_gpen256 import get_enhancer
+                    threading.Thread(target=get_enhancer, daemon=True).start()
+                except Exception as e:
+                    print(f"[FACELESS] GPEN-256 preload error: {e}")
+            elif key == "face_enhancer_gpen512":
+                try:
+                    from modules.processors.frame.face_enhancer_gpen512 import get_enhancer
+                    threading.Thread(target=get_enhancer, daemon=True).start()
+                except Exception as e:
+                    print(f"[FACELESS] GPEN-512 preload error: {e}")
+            elif key == "face_enhancer":
+                try:
+                    from modules.processors.frame.face_enhancer import get_face_enhancer
+                    threading.Thread(target=get_face_enhancer, daemon=True).start()
+                except Exception as e:
+                    print(f"[FACELESS] GFPGAN preload error: {e}")
     elif key in FLOAT_CONTROLS:
         setattr(modules.globals, FLOAT_CONTROLS[key], float(value))
     elif key == "quality_preset":
@@ -227,6 +249,10 @@ class PhantomServer:
             path = msg.get("path", "")
             await self._set_source(ws, path)
 
+        elif msg_type == "add_source":
+            path = msg.get("path", "")
+            await self._add_source(ws, path)
+
         elif msg_type == "control":
             key = msg.get("key", "")
             value = msg.get("value")
@@ -291,9 +317,22 @@ class PhantomServer:
                 }))
                 return
 
+            # Preprocess: align-crop to 512×512 and re-detect for cleaner embedding
+            preprocessed_face = await asyncio.to_thread(
+                self._preprocess_source_face, img, face
+            )
+            if preprocessed_face is not None:
+                face = preprocessed_face
+
             modules.globals.source_path = path
             self._pipeline.set_source_face(face)
             modules.globals.cached_source_face = face
+
+            # Initialize multi-source embedding list
+            modules.globals.source_embeddings = []
+            if hasattr(face, 'normed_embedding') and face.normed_embedding is not None:
+                modules.globals.source_embeddings.append(face.normed_embedding.copy())
+            modules.globals.averaged_embedding = None
 
             thumb = make_thumbnail(img)
             print(f"[FACELESS] Sending source_face (detected), thumbnail len={len(thumb)}, clients={len(self.clients)}")
@@ -309,6 +348,106 @@ class PhantomServer:
 
         except Exception as e:
             print(f"[FACELESS] _set_source error: {e}")
+            await self._broadcast(json.dumps({
+                "type": "error",
+                "message": str(e),
+            }))
+
+    @staticmethod
+    def _preprocess_source_face(img: np.ndarray, face) -> object:
+        """Align-crop source to 512×512 using FFHQ template, re-detect for better embedding.
+
+        Returns improved Face object, or None if preprocessing fails.
+        """
+        try:
+            if not hasattr(face, 'kps') or face.kps is None:
+                return None
+
+            landmarks = face.kps.astype(np.float32)
+            template = _FFHQ_TEMPLATE * 512.0
+
+            M = cv2.estimateAffinePartial2D(landmarks, template, method=cv2.LMEDS)[0]
+            if M is None:
+                return None
+
+            aligned = cv2.warpAffine(
+                img, M, (512, 512),
+                flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE,
+            )
+
+            # Re-detect on the clean aligned crop for better embedding
+            clean_face = get_one_face(aligned)
+            if clean_face is None:
+                return None
+
+            print("[FACELESS] Source preprocessed: aligned 512x512")
+            return clean_face
+
+        except Exception as e:
+            print(f"[FACELESS] Source preprocessing failed: {e}")
+            return None
+
+    async def _add_source(self, ws: ServerConnection, path: str) -> None:
+        """Add an additional source face image, average embeddings for multi-angle quality."""
+        if not path:
+            return
+
+        try:
+            img = await asyncio.to_thread(cv2.imread, path)
+            if img is None:
+                await self._broadcast(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to read image: {path}",
+                }))
+                return
+
+            face = await asyncio.to_thread(get_one_face, img)
+            if face is None:
+                await self._broadcast(json.dumps({
+                    "type": "status",
+                    "message": "No face detected in additional source image",
+                }))
+                return
+
+            # Preprocess for cleaner embedding
+            preprocessed = await asyncio.to_thread(
+                self._preprocess_source_face, img, face
+            )
+            if preprocessed is not None:
+                face = preprocessed
+
+            if not hasattr(face, 'normed_embedding') or face.normed_embedding is None:
+                await self._broadcast(json.dumps({
+                    "type": "error",
+                    "message": "Could not extract embedding from additional source",
+                }))
+                return
+
+            # Accumulate embedding
+            modules.globals.source_embeddings.append(face.normed_embedding.copy())
+
+            # Compute L2-normalized average across all source embeddings
+            stacked = np.stack(modules.globals.source_embeddings, axis=0)
+            avg = stacked.mean(axis=0)
+            norm = np.linalg.norm(avg)
+            if norm > 0:
+                avg = avg / norm
+            modules.globals.averaged_embedding = avg
+
+            # Update the cached source face with the averaged embedding
+            cached = modules.globals.cached_source_face
+            if cached is not None:
+                cached.normed_embedding = avg
+
+            n = len(modules.globals.source_embeddings)
+            print(f"[FACELESS] Source embedding averaged from {n} images")
+            await self._broadcast(json.dumps({
+                "type": "status",
+                "message": f"Source averaged from {n} images",
+            }))
+
+        except Exception as e:
+            print(f"[FACELESS] _add_source error: {e}")
             await self._broadcast(json.dumps({
                 "type": "error",
                 "message": str(e),
