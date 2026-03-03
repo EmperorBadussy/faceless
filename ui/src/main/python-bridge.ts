@@ -26,9 +26,43 @@ function getProjectRoot(): string {
   return process.cwd()
 }
 
+/** Check if a WebSocket server is already running on the port. */
+async function isServerAlreadyRunning(port: number = 7865): Promise<boolean> {
+  return new Promise((resolve) => {
+    const net = require('net') as typeof import('net')
+    const socket = net.createConnection({ host: '127.0.0.1', port }, () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.on('error', () => {
+      resolve(false)
+    })
+    socket.setTimeout(1500, () => {
+      socket.destroy()
+      resolve(false)
+    })
+  })
+}
+
+let externalServer = false
+
+export function isUsingExternalServer(): boolean {
+  return externalServer
+}
+
 export function startPython(executionProvider: string = 'cuda'): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     if (pythonProcess) {
+      resolve()
+      return
+    }
+
+    // Check if server is already running (started externally)
+    const alreadyRunning = await isServerAlreadyRunning()
+    if (alreadyRunning) {
+      console.log('[python-bridge] Server already running on :7865 — skipping spawn')
+      pythonReady = true
+      externalServer = true
       resolve()
       return
     }
@@ -97,6 +131,10 @@ export function startPython(executionProvider: string = 'cuda'): Promise<void> {
 }
 
 export function stopPython(): void {
+  if (externalServer) {
+    console.log('[python-bridge] External server — not killing')
+    return
+  }
   if (!pythonProcess) return
 
   console.log('[python-bridge] Stopping Python...')

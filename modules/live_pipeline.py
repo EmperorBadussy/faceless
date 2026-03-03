@@ -26,7 +26,7 @@ import numpy as np
 
 import modules.globals
 from modules.gpu_processing import gpu_flip, gpu_resize, gpu_cvt_color, GpuProcessor
-from modules.face_analyser import get_one_face, get_many_faces
+from modules.face_analyser import get_one_face, get_many_faces, detect_one_face, detect_many_faces
 from modules.typing import Face, Frame
 
 
@@ -233,11 +233,11 @@ class LivePipeline:
                 time.sleep(0.01)
                 continue
 
-            # Run detection
+            # Run detection (fast mode — no ArcFace recognition, ~2x faster)
             if modules.globals.many_faces:
-                faces = get_many_faces(frame)
+                faces = detect_many_faces(frame)
             else:
-                face = get_one_face(frame)
+                face = detect_one_face(frame)
                 faces = [face] if face else None
 
             # Publish results
@@ -261,11 +261,12 @@ class LivePipeline:
         because InsightFace's CPU-side warp/paste scales with frame size:
           1080p = 98ms, 540p = 27ms, but the model itself is 128x128 either way.
         """
-        from modules.processors.frame.face_swapper import swap_face, apply_post_processing
+        from modules.processors.frame.face_swapper import swap_face_gpu, apply_post_processing
         from modules.processors.frame.face_enhancer_gpen256 import enhance_face as gpen256_enhance
         from insightface.app.common import Face
 
-        PROCESS_W, PROCESS_H = 854, 480  # 480p swap = ~31fps (540p=27fps, 1080p=10fps)
+        # GPU warp eliminates the CPU resolution bottleneck — process at native res
+        PROCESS_W, PROCESS_H = 1920, 1080
 
         frame_count = 0
         t0 = time.time()
@@ -321,7 +322,7 @@ class LivePipeline:
             swapped_bboxes = []
 
             for target_face in scaled_faces:
-                result = swap_face(self._source_face, target_face, result)
+                result = swap_face_gpu(self._source_face, target_face, result)
                 if hasattr(target_face, "bbox") and target_face.bbox is not None:
                     swapped_bboxes.append(target_face.bbox.astype(int))
 
@@ -338,9 +339,51 @@ class LivePipeline:
                 if hasattr(processor, 'process_frame'):
                     result = processor.process_frame(None, result)
 
-            # Upscale back to original resolution for output
-            if needs_upscale:
-                result = cv2.resize(result, (orig_w, orig_h), interpolation=cv2.INTER_LANCZOS4)
+            # Paste swapped face regions onto original 1080p frame
+            # instead of upscaling the entire 480p result (keeps background sharp)
+            if needs_upscale and swapped_bboxes:
+                output = frame.copy()
+                inv_sx = orig_w / PROCESS_W
+                inv_sy = orig_h / PROCESS_H
+
+                for bbox in swapped_bboxes:
+                    pad = 80  # wide padding at 480p to capture full warp + blend region
+                    x1 = max(0, bbox[0] - pad)
+                    y1 = max(0, bbox[1] - pad)
+                    x2 = min(PROCESS_W, bbox[2] + pad)
+                    y2 = min(PROCESS_H, bbox[3] + pad)
+
+                    face_crop = result[y1:y2, x1:x2]
+
+                    # Map to 1080p coordinates
+                    ox1, oy1 = int(x1 * inv_sx), int(y1 * inv_sy)
+                    ox2, oy2 = int(x2 * inv_sx), int(y2 * inv_sy)
+                    tw, th = ox2 - ox1, oy2 - oy1
+
+                    if tw <= 0 or th <= 0:
+                        continue
+
+                    upscaled = cv2.resize(face_crop, (tw, th), interpolation=cv2.INTER_LANCZOS4)
+
+                    # Wide feathered blend to eliminate visible box edges
+                    feather = max(30, tw // 4, th // 4)
+                    feather = min(feather, tw // 2, th // 2)  # can't exceed half the region
+                    mask = np.ones((th, tw), dtype=np.float32)
+                    if feather > 1:
+                        ramp = np.linspace(0, 1, feather, dtype=np.float32)
+                        mask[:feather, :] = np.minimum(mask[:feather, :], ramp[:, np.newaxis])
+                        mask[-feather:, :] = np.minimum(mask[-feather:, :], ramp[::-1][:, np.newaxis])
+                        mask[:, :feather] = np.minimum(mask[:, :feather], ramp[np.newaxis, :])
+                        mask[:, -feather:] = np.minimum(mask[:, -feather:], ramp[::-1][np.newaxis, :])
+
+                    m = mask[:, :, np.newaxis]
+                    roi = output[oy1:oy2, ox1:ox2]
+                    output[oy1:oy2, ox1:ox2] = (upscaled * m + roi * (1.0 - m)).astype(np.uint8)
+
+                result = output
+            elif needs_upscale:
+                # No faces swapped, just pass through original
+                result = frame
 
             # FPS overlay
             if modules.globals.show_fps:

@@ -160,13 +160,29 @@ def encode_execution_providers(execution_providers: List[str]) -> List[str]:
 
 
 def decode_execution_providers(execution_providers: List[str]) -> List[str]:
-    return [
+    available = onnxruntime.get_available_providers()
+    result = [
         provider for provider, encoded in zip(
-            onnxruntime.get_available_providers(),
-            encode_execution_providers(onnxruntime.get_available_providers())
+            available,
+            encode_execution_providers(available)
         )
         if any(ep in encoded for ep in execution_providers)
     ]
+    # Auto-add TensorRT if CUDA is requested AND TensorRT libs are actually installed
+    if 'CUDAExecutionProvider' in result and 'TensorrtExecutionProvider' in available:
+        if 'TensorrtExecutionProvider' not in result:
+            # Check if TensorRT shared libs are actually on the system
+            trt_found = shutil.which('trtexec') is not None
+            if not trt_found:
+                # Also check common lib names
+                import ctypes.util
+                trt_found = ctypes.util.find_library('nvinfer') is not None
+            if trt_found:
+                result.insert(0, 'TensorrtExecutionProvider')
+                print("[FACELESS] TensorRT EP enabled (auto, falls back to CUDA for unsupported ops)")
+            else:
+                print("[FACELESS] TensorRT EP skipped (libs not installed) — using CUDA")
+    return result
 
 
 def suggest_max_memory() -> int:

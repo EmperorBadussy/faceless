@@ -14,14 +14,12 @@ from modules.utilities import get_temp_directory_path, create_temp, extract_fram
 from pathlib import Path
 
 FACE_ANALYSER = None
+FACE_ANALYSER_DETECT = None
 FACE_ANALYSER_LOCK = threading.Lock()
 
 
 def get_face_analyser() -> Any:
-    """Get face analyser with thread-safe initialization.
-
-    FACELESS: Uses quality preset for detection size (320x320 normal, 640x640 high).
-    """
+    """Get full face analyser (detection + recognition) for source face embedding."""
     global FACE_ANALYSER
 
     if FACE_ANALYSER is None:
@@ -36,11 +34,32 @@ def get_face_analyser() -> Any:
                     allowed_modules=['detection', 'recognition']
                 )
                 FACE_ANALYSER.prepare(ctx_id=0, det_size=det_size)
-                print(f"[FACELESS] Face analyser ready: det_size={det_size}, providers={modules.globals.execution_providers}")
+                print(f"[FACELESS] Face analyser (full) ready: det_size={det_size}")
     return FACE_ANALYSER
 
 
+def get_face_detector() -> Any:
+    """Get detection-only face analyser for live pipeline (skips ArcFace recognition ~2x faster)."""
+    global FACE_ANALYSER_DETECT
+
+    if FACE_ANALYSER_DETECT is None:
+        with FACE_ANALYSER_LOCK:
+            if FACE_ANALYSER_DETECT is None:
+                cfg = modules.globals.get_preset_config()
+                det_size = cfg.get("det_size", (320, 320))
+
+                FACE_ANALYSER_DETECT = insightface.app.FaceAnalysis(
+                    name='buffalo_l',
+                    providers=modules.globals.execution_providers,
+                    allowed_modules=['detection']
+                )
+                FACE_ANALYSER_DETECT.prepare(ctx_id=0, det_size=det_size)
+                print(f"[FACELESS] Face detector (fast) ready: det_size={det_size}")
+    return FACE_ANALYSER_DETECT
+
+
 def get_one_face(frame: Frame) -> Any:
+    """Detect one face with full recognition (for source face embedding)."""
     face = get_face_analyser().get(frame)
     try:
         return min(face, key=lambda x: x.bbox[0])
@@ -49,8 +68,26 @@ def get_one_face(frame: Frame) -> Any:
 
 
 def get_many_faces(frame: Frame) -> Any:
+    """Detect all faces with full recognition."""
     try:
         return get_face_analyser().get(frame)
+    except IndexError:
+        return None
+
+
+def detect_one_face(frame: Frame) -> Any:
+    """Detect one face (no recognition — fast mode for live pipeline)."""
+    faces = get_face_detector().get(frame)
+    try:
+        return min(faces, key=lambda x: x.bbox[0])
+    except ValueError:
+        return None
+
+
+def detect_many_faces(frame: Frame) -> Any:
+    """Detect all faces (no recognition — fast mode for live pipeline)."""
+    try:
+        return get_face_detector().get(frame)
     except IndexError:
         return None
 

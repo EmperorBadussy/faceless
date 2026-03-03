@@ -176,6 +176,9 @@ class PhantomServer:
         self._pipeline = get_pipeline()
         self._vcam: Optional[object] = None
         self._vcam_enabled = False
+        self._vcam_thread = None
+        self._vcam_latest_frame: Optional[np.ndarray] = None
+        self._vcam_err_logged = False
 
     async def handler(self, ws: ServerConnection) -> None:
         """Handle a single WebSocket connection."""
@@ -394,6 +397,8 @@ class PhantomServer:
 
     async def _toggle_vcam(self, enabled: bool) -> None:
         """Toggle virtual camera output."""
+        import threading
+
         if enabled and not self._vcam_enabled:
             if not HAS_VCAM:
                 await self._broadcast(json.dumps({
@@ -404,6 +409,12 @@ class PhantomServer:
             try:
                 self._vcam = pyvirtualcam.Camera(width=1920, height=1080, fps=30, print_fps=False)
                 self._vcam_enabled = True
+                self._vcam_err_logged = False
+                # Start dedicated vcam output thread for consistent timing
+                self._vcam_thread = threading.Thread(
+                    target=self._vcam_thread_loop, daemon=True, name="faceless-vcam"
+                )
+                self._vcam_thread.start()
                 print(f"[FACELESS] Virtual camera started: {self._vcam.device}")
                 await self._broadcast(json.dumps({
                     "type": "status",
@@ -417,6 +428,10 @@ class PhantomServer:
                 }))
         elif not enabled and self._vcam_enabled:
             self._vcam_enabled = False
+            # Thread will exit on its own since _vcam_enabled is False
+            if hasattr(self, '_vcam_thread') and self._vcam_thread:
+                self._vcam_thread.join(timeout=2.0)
+                self._vcam_thread = None
             if self._vcam:
                 try:
                     self._vcam.close()
@@ -428,6 +443,31 @@ class PhantomServer:
                 "type": "status",
                 "message": "Virtual camera stopped",
             }))
+
+    def _vcam_thread_loop(self) -> None:
+        """Dedicated thread for virtual camera output — consistent 30fps timing.
+
+        Reads from self._vcam_latest_frame (set by the frame loop) so we don't
+        compete with WebSocket delivery for the processed queue.
+        """
+        while self._vcam_enabled and self._vcam:
+            frame = self._vcam_latest_frame
+            if frame is not None:
+                try:
+                    h, w = frame.shape[:2]
+                    if w != self._vcam.width or h != self._vcam.height:
+                        vcam_frame = cv2.resize(frame, (self._vcam.width, self._vcam.height))
+                    else:
+                        vcam_frame = frame
+                    self._vcam.send(cv2.cvtColor(vcam_frame, cv2.COLOR_BGR2RGB))
+                    self._vcam.sleep_until_next_frame()
+                except Exception as e:
+                    if not getattr(self, '_vcam_err_logged', False):
+                        print(f"[FACELESS] Virtual camera send error: {e}")
+                        self._vcam_err_logged = True
+                    break
+            else:
+                time.sleep(0.01)
 
     async def _frame_loop(self) -> None:
         """Continuously grab processed frames and send as binary WebSocket messages."""
@@ -442,18 +482,8 @@ class PhantomServer:
                 if elapsed < target_interval:
                     await asyncio.sleep(target_interval - elapsed)
 
-                # Push to virtual camera if enabled (full res, BGR->RGB)
-                if self._vcam_enabled and self._vcam:
-                    try:
-                        h, w = frame.shape[:2]
-                        if w != 1920 or h != 1080:
-                            vcam_frame = cv2.resize(frame, (1920, 1080))
-                        else:
-                            vcam_frame = frame
-                        self._vcam.send(cv2.cvtColor(vcam_frame, cv2.COLOR_BGR2RGB))
-                        # Don't call sleep_until_next_frame() — we already rate-limit at 30fps
-                    except Exception:
-                        pass
+                # Share frame with vcam thread
+                self._vcam_latest_frame = frame
 
                 # Encode for WebSocket preview (downscaled)
                 jpeg = await asyncio.to_thread(encode_frame_jpeg, frame)

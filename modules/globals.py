@@ -24,15 +24,15 @@ quality_preset: QualityPreset = QualityPreset.NORMAL
 # Preset-specific defaults (overridden by preset selection)
 PRESET_CONFIGS = {
     QualityPreset.NORMAL: {
-        "det_size": (320, 320),          # Face detection input resolution
-        "capture_width": 1920,           # Full HD capture (face model stays 320x320)
+        "det_size": (640, 640),          # Higher-res detection (RTX 5090 has headroom)
+        "capture_width": 1920,           # Full HD capture
         "capture_height": 1080,          # Full HD capture
-        "capture_fps": 30,              # 30fps target (more stable than 60 at 1080p)
+        "capture_fps": 30,              # 30fps target
         "enhancer_model": None,          # No enhancer in normal mode
         "max_vram_gb": 8,                # VRAM budget
         "process_workers": 4,            # ProcessPoolExecutor workers for video
         "use_fp16": True,                # FP16 inference
-        "face_swap_model": "inswapper_128_fp16.onnx",
+        "face_swap_model": "reswapper_256.onnx",
         "poisson_blend": False,          # Too slow for real-time
         "sharpness": 0.3,               # Mild sharpening
         "interpolation_weight": 0.0,     # No temporal smoothing (lowest latency)

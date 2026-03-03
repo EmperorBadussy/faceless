@@ -20,11 +20,31 @@ IS_APPLE_SILICON = platform.system() == "Darwin" and platform.machine() == "arm6
 # Limit concurrent ONNX calls to avoid VRAM exhaustion on multi-face frames
 THREAD_SEMAPHORE = threading.Semaphore(min(max(1, (os.cpu_count() or 1)), 8))
 
+# Cached feathered masks by input_size (identical every call, compute once)
+_MASK_CACHE: dict[int, np.ndarray] = {}
+
+
+def _get_feathered_mask(input_size: int) -> np.ndarray:
+    """Get cached feathered edge mask for blending."""
+    if input_size not in _MASK_CACHE:
+        mask = np.ones((input_size, input_size), dtype=np.float32)
+        border = max(1, input_size // 16)
+        mask[:border, :] = np.linspace(0, 1, border, dtype=np.float32)[:, np.newaxis]
+        mask[-border:, :] = np.linspace(1, 0, border, dtype=np.float32)[:, np.newaxis]
+        mask[:, :border] = np.minimum(mask[:, :border], np.linspace(0, 1, border, dtype=np.float32)[np.newaxis, :])
+        mask[:, -border:] = np.minimum(mask[:, -border:], np.linspace(1, 0, border, dtype=np.float32)[np.newaxis, :])
+        _MASK_CACHE[input_size] = mask
+    return _MASK_CACHE[input_size]
+
 
 def create_onnx_session(model_path: str) -> onnxruntime.InferenceSession:
-    """Create an ONNX Runtime session using the configured execution providers."""
+    """Create an ONNX Runtime session with full graph optimization."""
+    opts = onnxruntime.SessionOptions()
+    opts.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
+    opts.enable_mem_pattern = True
+    opts.enable_cpu_mem_arena = True
     providers = modules.globals.execution_providers
-    session = onnxruntime.InferenceSession(model_path, providers=providers)
+    session = onnxruntime.InferenceSession(model_path, sess_options=opts, providers=providers)
     return session
 
 
@@ -50,8 +70,8 @@ def preprocess_face(face_img: np.ndarray, input_size: int) -> np.ndarray:
     """
     resized = cv2.resize(face_img, (input_size, input_size), interpolation=cv2.INTER_LINEAR)
     rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-    blob = rgb.astype(np.float32) / 255.0 * 2.0 - 1.0
-    blob = np.transpose(blob, (2, 0, 1))[np.newaxis, ...]
+    blob = (rgb.astype(np.float32) - 127.5) * (1.0 / 127.5)
+    blob = np.ascontiguousarray(blob.transpose(2, 0, 1)[np.newaxis, ...])
     return blob
 
 
@@ -121,13 +141,8 @@ def enhance_face_onnx(
         output = session.run(None, {session.get_inputs()[0].name: blob})[0]
     enhanced = postprocess_face(output)
 
-    # Create mask for blending (feathered edges)
-    mask = np.ones((input_size, input_size), dtype=np.float32)
-    border = max(1, input_size // 16)
-    mask[:border, :] = np.linspace(0, 1, border)[:, np.newaxis]
-    mask[-border:, :] = np.linspace(1, 0, border)[:, np.newaxis]
-    mask[:, :border] = np.minimum(mask[:, :border], np.linspace(0, 1, border)[np.newaxis, :])
-    mask[:, -border:] = np.minimum(mask[:, -border:], np.linspace(1, 0, border)[np.newaxis, :])
+    # Use cached feathered mask
+    mask = _get_feathered_mask(input_size)
 
     h, w = frame.shape[:2]
     warped_enhanced = cv2.warpAffine(
@@ -139,7 +154,18 @@ def enhance_face_onnx(
         flags=cv2.INTER_LINEAR, borderValue=0,
     )
 
-    mask_3ch = warped_mask[:, :, np.newaxis]
-    result = (warped_enhanced.astype(np.float32) * mask_3ch +
-              frame.astype(np.float32) * (1.0 - mask_3ch))
-    return np.clip(result, 0, 255).astype(np.uint8)
+    # ROI-only blending: only convert to float32 in the face region, not the whole frame
+    nz_rows = np.any(warped_mask > 0, axis=1)
+    nz_cols = np.any(warped_mask > 0, axis=0)
+    if not np.any(nz_rows) or not np.any(nz_cols):
+        return frame
+    ry1, ry2 = np.argmax(nz_rows), h - np.argmax(nz_rows[::-1])
+    rx1, rx2 = np.argmax(nz_cols), w - np.argmax(nz_cols[::-1])
+
+    roi_mask = warped_mask[ry1:ry2, rx1:rx2, np.newaxis]
+    roi_enhanced = warped_enhanced[ry1:ry2, rx1:rx2].astype(np.float32)
+    roi_frame = frame[ry1:ry2, rx1:rx2].astype(np.float32)
+    blended = (roi_enhanced * roi_mask + roi_frame * (1.0 - roi_mask))
+    result = frame.copy()
+    result[ry1:ry2, rx1:rx2] = np.clip(blended, 0, 255).astype(np.uint8)
+    return result
