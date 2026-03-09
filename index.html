@@ -537,23 +537,10 @@ body {
   position: relative;
   overflow: hidden;
 }
-.mock-face-mesh {
-  width: 80%;
-  height: 80%;
-  position: relative;
-}
-.mock-face-mesh svg {
+#sourceCircuitCanvas {
   width: 100%;
   height: 100%;
-  stroke: var(--amber-bright);
-  fill: none;
-  stroke-width: 0.5;
-  opacity: 0.6;
-  animation: face-pulse 3s ease-in-out infinite;
-}
-@keyframes face-pulse {
-  0%, 100% { opacity: 0.4; filter: drop-shadow(0 0 2px rgba(238,211,34,0.3)); }
-  50% { opacity: 0.8; filter: drop-shadow(0 0 8px rgba(238,211,34,0.6)); }
+  display: block;
 }
 .mock-face-label {
   font-family: var(--font-mono);
@@ -1458,21 +1445,7 @@ body {
           <div class="mock-source-panel">
             <div class="mock-panel-label">SOURCE FACE</div>
             <div class="mock-face-slot">
-              <div class="mock-face-mesh">
-                <svg viewBox="0 0 100 120">
-                  <ellipse cx="50" cy="55" rx="35" ry="45"/>
-                  <circle cx="35" cy="45" r="5"/>
-                  <circle cx="65" cy="45" r="5"/>
-                  <path d="M40 75 Q50 85 60 75"/>
-                  <line x1="50" y1="10" x2="50" y2="25"/>
-                  <line x1="30" y1="55" x2="15" y2="55"/>
-                  <line x1="70" y1="55" x2="85" y2="55"/>
-                  <path d="M25 35 Q35 28 45 35"/>
-                  <path d="M55 35 Q65 28 75 35"/>
-                  <line x1="42" y1="55" x2="50" y2="65"/>
-                  <line x1="58" y1="55" x2="50" y2="65"/>
-                </svg>
-              </div>
+              <canvas id="sourceCircuitCanvas"></canvas>
             </div>
             <div class="mock-face-label">FACE_REF_001.JPG</div>
             <div class="mock-swap-arrow">
@@ -1973,7 +1946,94 @@ body {
   requestAnimationFrame(animate);
 })();
 
-// ============ MOCK PREVIEW CANVAS ============
+// ============ SOURCE PANEL CIRCUIT CANVAS ============
+(function() {
+  var canvas = document.getElementById('sourceCircuitCanvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var rect = canvas.parentElement.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  var w = rect.width, h = rect.height;
+
+  // Matrix rain columns
+  var cols = Math.floor(w / 8);
+  var drops = [];
+  for (var i = 0; i < cols; i++) {
+    drops.push({ y: Math.random() * h, speed: 0.3 + Math.random() * 0.8, chars: [] });
+    for (var j = 0; j < 8; j++) {
+      drops[i].chars.push(String.fromCharCode(0x30A0 + Math.floor(Math.random() * 96)));
+    }
+  }
+
+  // Circuit nodes
+  var nodes = [];
+  for (var i = 0; i < 12; i++) {
+    nodes.push({ x: Math.random() * w, y: Math.random() * h, pulse: Math.random() * Math.PI * 2 });
+  }
+
+  function draw(time) {
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(0, 0, w, h);
+
+    // Matrix rain
+    ctx.font = '6px monospace';
+    drops.forEach(function(d, i) {
+      var x = i * 8;
+      d.y += d.speed;
+      if (d.y > h + 20) { d.y = -10; }
+      for (var j = 0; j < 3; j++) {
+        var cy = d.y - j * 8;
+        if (cy < 0 || cy > h) continue;
+        var alpha = j === 0 ? 0.9 : 0.3 - j * 0.1;
+        ctx.fillStyle = j === 0 ? 'rgba(249,232,103,' + alpha + ')' : 'rgba(212,160,6,' + alpha + ')';
+        var ci = (Math.floor(time * 0.01) + j + i) % d.chars.length;
+        ctx.fillText(d.chars[ci], x, cy);
+      }
+      // Randomly swap chars
+      if (Math.random() < 0.02) {
+        d.chars[Math.floor(Math.random() * d.chars.length)] = String.fromCharCode(0x30A0 + Math.floor(Math.random() * 96));
+      }
+    });
+
+    // Circuit traces
+    ctx.strokeStyle = 'rgba(212,160,6,0.08)';
+    ctx.lineWidth = 0.5;
+    for (var i = 0; i < nodes.length; i++) {
+      for (var j = i + 1; j < nodes.length; j++) {
+        var dx = nodes[i].x - nodes[j].x;
+        var dy = nodes[i].y - nodes[j].y;
+        if (Math.sqrt(dx*dx+dy*dy) < 80) {
+          ctx.beginPath();
+          ctx.moveTo(nodes[i].x, nodes[i].y);
+          // Right-angle circuit path
+          ctx.lineTo(nodes[j].x, nodes[i].y);
+          ctx.lineTo(nodes[j].x, nodes[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Node dots
+    nodes.forEach(function(n) {
+      var p = Math.sin(time * 0.003 + n.pulse) * 0.4 + 0.6;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, 2 * p, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(238,211,34,' + (0.6 * p) + ')';
+      ctx.fill();
+    });
+
+    requestAnimationFrame(draw);
+  }
+  // Initial black fill
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+  requestAnimationFrame(draw);
+})();
+
+// ============ MOCK PREVIEW CANVAS — CIRCUIT MATRIX ============
 (function() {
   var canvas = document.getElementById('mockPreviewCanvas');
   if (!canvas) return;
@@ -1983,106 +2043,159 @@ body {
   canvas.height = rect.height * 2;
   ctx.scale(2, 2);
   var w = rect.width, h = rect.height;
-
-  var faceNodes = [];
   var cx = w / 2, cy = h / 2;
-  // Create face mesh points
-  for (var i = 0; i < 60; i++) {
-    var a = Math.random() * Math.PI * 2;
-    var r = Math.random() * 50 + 10;
-    faceNodes.push({
-      x: cx + Math.cos(a) * r,
-      y: cy + Math.sin(a) * r * 1.2,
-      ox: cx + Math.cos(a) * r,
-      oy: cy + Math.sin(a) * r * 1.2,
-      size: 1 + Math.random(),
-      phase: Math.random() * Math.PI * 2
+
+  // Circuit grid
+  var gridSize = 16;
+  var gridNodes = [];
+  for (var gx = gridSize; gx < w; gx += gridSize) {
+    for (var gy = gridSize; gy < h; gy += gridSize) {
+      if (Math.random() < 0.3) {
+        gridNodes.push({ x: gx, y: gy, active: false, pulse: Math.random() * Math.PI * 2, bright: Math.random() });
+      }
+    }
+  }
+
+  // Data streams flowing through circuit
+  var streams = [];
+  for (var i = 0; i < 8; i++) {
+    streams.push({
+      x: Math.random() * w, y: Math.random() * h,
+      tx: Math.random() * w, ty: Math.random() * h,
+      progress: Math.random(), speed: 0.003 + Math.random() * 0.005,
+      size: 1 + Math.random() * 2
     });
   }
 
+  // Scanning line
+  var scanY = 0;
+
   function draw(time) {
-    ctx.clearRect(0, 0, w, h);
-    // Dark feed bg
-    ctx.fillStyle = '#050403';
+    // Fade trail
+    ctx.fillStyle = 'rgba(5,4,3,0.15)';
     ctx.fillRect(0, 0, w, h);
 
     // Scanlines
-    ctx.globalAlpha = 0.03;
-    for (var y = 0; y < h; y += 2) {
+    ctx.globalAlpha = 0.02;
+    for (var y = 0; y < h; y += 3) {
       ctx.fillStyle = '#D4A006';
       ctx.fillRect(0, y, w, 1);
     }
     ctx.globalAlpha = 1;
 
-    // Face outline ellipse
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 55, 70, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(238, 211, 34, 0.15)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    // Horizontal scan
+    scanY = (scanY + 0.4) % h;
+    ctx.fillStyle = 'rgba(212,160,6,0.06)';
+    ctx.fillRect(0, scanY - 15, w, 30);
+    ctx.fillStyle = 'rgba(238,211,34,0.2)';
+    ctx.fillRect(0, scanY, w, 1);
 
-    // Eye outlines
-    ctx.beginPath();
-    ctx.ellipse(cx - 18, cy - 10, 10, 6, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(249, 232, 103, 0.2)';
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(cx + 18, cy - 10, 10, 6, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Nose
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 5);
-    ctx.lineTo(cx - 5, cy + 10);
-    ctx.lineTo(cx + 5, cy + 10);
-    ctx.strokeStyle = 'rgba(212, 160, 6, 0.15)';
-    ctx.stroke();
-
-    // Mouth
-    ctx.beginPath();
-    ctx.moveTo(cx - 15, cy + 22);
-    ctx.quadraticCurveTo(cx, cy + 30, cx + 15, cy + 22);
-    ctx.strokeStyle = 'rgba(212, 160, 6, 0.15)';
-    ctx.stroke();
-
-    // Animated face mesh dots
-    faceNodes.forEach(function(n) {
-      var drift = Math.sin(time * 0.002 + n.phase) * 2;
-      var px = n.ox + drift;
-      var py = n.oy + Math.cos(time * 0.0015 + n.phase) * 1.5;
+    // Circuit grid nodes
+    gridNodes.forEach(function(n) {
+      var p = Math.sin(time * 0.002 + n.pulse) * 0.5 + 0.5;
+      var nearScan = Math.abs(n.y - scanY) < 20;
+      var alpha = nearScan ? 0.6 : 0.08 + p * 0.12;
 
       ctx.beginPath();
-      ctx.arc(px, py, n.size, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(238, 211, 34, 0.4)';
+      ctx.arc(n.x, n.y, nearScan ? 1.5 : 1, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(238,211,34,' + alpha + ')';
       ctx.fill();
+
+      if (nearScan && n.bright > 0.7) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(249,232,103,0.08)';
+        ctx.fill();
+      }
     });
 
-    // Connect nearby face nodes
-    for (var i = 0; i < faceNodes.length; i++) {
-      for (var j = i + 1; j < faceNodes.length; j++) {
-        var dx = faceNodes[i].ox - faceNodes[j].ox;
-        var dy = faceNodes[i].oy - faceNodes[j].oy;
-        var d = Math.sqrt(dx * dx + dy * dy);
-        if (d < 30) {
+    // Circuit traces between nearby nodes
+    ctx.lineWidth = 0.3;
+    for (var i = 0; i < gridNodes.length; i++) {
+      for (var j = i + 1; j < gridNodes.length; j++) {
+        var dx = gridNodes[i].x - gridNodes[j].x;
+        var dy = gridNodes[i].y - gridNodes[j].y;
+        var d = Math.sqrt(dx*dx+dy*dy);
+        if (d < gridSize * 2.5 && d > 0) {
+          var nearScan2 = Math.abs(gridNodes[i].y - scanY) < 30 || Math.abs(gridNodes[j].y - scanY) < 30;
+          ctx.strokeStyle = nearScan2 ? 'rgba(238,211,34,0.15)' : 'rgba(212,160,6,0.04)';
           ctx.beginPath();
-          ctx.moveTo(faceNodes[i].ox + Math.sin(time * 0.002 + faceNodes[i].phase) * 2, faceNodes[i].oy);
-          ctx.lineTo(faceNodes[j].ox + Math.sin(time * 0.002 + faceNodes[j].phase) * 2, faceNodes[j].oy);
-          ctx.strokeStyle = 'rgba(212, 160, 6, ' + (0.08 * (1 - d / 30)) + ')';
-          ctx.lineWidth = 0.5;
+          ctx.moveTo(gridNodes[i].x, gridNodes[i].y);
+          // Right-angle circuit routing
+          if (Math.abs(dx) > Math.abs(dy)) {
+            ctx.lineTo(gridNodes[j].x, gridNodes[i].y);
+            ctx.lineTo(gridNodes[j].x, gridNodes[j].y);
+          } else {
+            ctx.lineTo(gridNodes[i].x, gridNodes[j].y);
+            ctx.lineTo(gridNodes[j].x, gridNodes[j].y);
+          }
           ctx.stroke();
         }
       }
     }
 
-    // "SWAP ACTIVE" overlay indicator
-    ctx.globalAlpha = 0.3 + Math.sin(time * 0.003) * 0.15;
-    ctx.fillStyle = 'rgba(212, 160, 6, 0.08)';
+    // Data streams - bright dots flowing along paths
+    streams.forEach(function(s) {
+      s.progress += s.speed;
+      if (s.progress > 1) {
+        s.x = s.tx; s.y = s.ty;
+        s.tx = Math.random() * w; s.ty = Math.random() * h;
+        s.progress = 0;
+      }
+      var px = s.x + (s.tx - s.x) * s.progress;
+      var py = s.y + (s.ty - s.y) * s.progress;
+
+      ctx.beginPath();
+      ctx.arc(px, py, s.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(249,232,103,0.7)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(px, py, s.size * 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(238,211,34,0.1)';
+      ctx.fill();
+    });
+
+    // Center detection zone - pulsing box
+    var boxPulse = Math.sin(time * 0.002) * 4;
+    ctx.strokeStyle = 'rgba(238,211,34,0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(cx - 40 - boxPulse, cy - 50 - boxPulse, 80 + boxPulse*2, 100 + boxPulse*2);
+    ctx.setLineDash([]);
+
+    // Corner brackets on detection zone
+    var bx = cx - 40 - boxPulse, by = cy - 50 - boxPulse;
+    var bw = 80 + boxPulse*2, bh = 100 + boxPulse*2;
+    var bl = 10;
+    ctx.strokeStyle = 'rgba(249,232,103,0.5)';
+    ctx.lineWidth = 1.5;
+    // Top-left
+    ctx.beginPath(); ctx.moveTo(bx, by+bl); ctx.lineTo(bx, by); ctx.lineTo(bx+bl, by); ctx.stroke();
+    // Top-right
+    ctx.beginPath(); ctx.moveTo(bx+bw-bl, by); ctx.lineTo(bx+bw, by); ctx.lineTo(bx+bw, by+bl); ctx.stroke();
+    // Bottom-left
+    ctx.beginPath(); ctx.moveTo(bx, by+bh-bl); ctx.lineTo(bx, by+bh); ctx.lineTo(bx+bl, by+bh); ctx.stroke();
+    // Bottom-right
+    ctx.beginPath(); ctx.moveTo(bx+bw-bl, by+bh); ctx.lineTo(bx+bw, by+bh); ctx.lineTo(bx+bw, by+bh-bl); ctx.stroke();
+
+    // "DETECTING" text
+    ctx.font = '6px Orbitron';
+    ctx.fillStyle = 'rgba(249,232,103,' + (0.4 + Math.sin(time * 0.004) * 0.3) + ')';
+    ctx.fillText('DETECTING', bx, by - 5);
+
+    // Edge glow
+    ctx.globalAlpha = 0.25 + Math.sin(time * 0.003) * 0.1;
+    ctx.fillStyle = 'rgba(212,160,6,0.06)';
     ctx.fillRect(0, 0, w, 2);
     ctx.fillRect(0, h - 2, w, 2);
+    ctx.fillRect(0, 0, 2, h);
+    ctx.fillRect(w - 2, 0, 2, h);
     ctx.globalAlpha = 1;
 
     requestAnimationFrame(draw);
   }
+  ctx.fillStyle = '#050403';
+  ctx.fillRect(0, 0, w, h);
   requestAnimationFrame(draw);
 })();
 
