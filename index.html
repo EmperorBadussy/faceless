@@ -1,0 +1,2278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FACELESS — Real-Time Face Swap Engine</title>
+<meta name="description" content="GPU-accelerated real-time face swapping at 30fps+. CUDA-optimized pipeline. Electron UI. Virtual camera output. Become anyone.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================
+   FACELESS — OLED AMBER FIRE DESIGN
+   Real-Time GPU-Accelerated Face Swap Engine
+   ============================================ */
+
+:root {
+  --bg-void: #000000;
+  --bg-surface: #0F0D06;
+  --bg-raised: #191406;
+  --bg-input: #201C0C;
+  --amber-dim: #361B0D;
+  --amber-muted: #644D0E;
+  --amber-core: #D4A006;
+  --amber-bright: #EED322;
+  --amber-vivid: #F9E867;
+  --amber-hot: #FCF3A5;
+  --amber-white: #FFFBEC;
+  --glow-subtle: 0 0 10px rgba(238,211,34,0.15);
+  --glow-medium: 0 0 20px rgba(238,211,34,0.25), 0 0 40px rgba(212,160,6,0.15);
+  --glow-intense: 0 0 20px rgba(238,211,34,0.4), 0 0 60px rgba(212,160,6,0.25), 0 0 100px rgba(212,160,6,0.1);
+  --glow-text: 0 0 8px rgba(249,232,103,0.6);
+  --glow-neon: 0 0 4px #F9E867, 0 0 12px rgba(249,232,103,0.5), 0 0 30px rgba(238,211,34,0.3), 0 0 60px rgba(212,160,6,0.15);
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'Rajdhani', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-fast: 150ms var(--ease-smooth);
+  --transition-normal: 300ms var(--ease-smooth);
+  --transition-slow: 500ms var(--ease-smooth);
+}
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(212,160,6,0.4);
+  color: var(--amber-white);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-void); }
+::-webkit-scrollbar-thumb {
+  background: var(--amber-muted);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--amber-bright);
+  box-shadow: 0 0 8px rgba(238,211,34,0.5);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--bg-void);
+  color: var(--amber-white);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg-void);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============ REVEAL ANIMATIONS ============ */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s var(--ease-smooth), transform 0.8s var(--ease-smooth);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-left {
+  opacity: 0;
+  transform: translateX(-60px);
+  transition: opacity 0.8s var(--ease-smooth), transform 0.8s var(--ease-smooth);
+}
+.reveal-left.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+.reveal-right {
+  opacity: 0;
+  transform: translateX(60px);
+  transition: opacity 0.8s var(--ease-smooth), transform 0.8s var(--ease-smooth);
+}
+.reveal-right.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+.reveal-scale {
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.8s var(--ease-smooth), transform 0.8s var(--ease-smooth);
+}
+.reveal-scale.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ============ NAVIGATION ============ */
+
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.4s, backdrop-filter 0.4s, border-color 0.4s;
+  border-bottom: 1px solid transparent;
+}
+.nav.scrolled {
+  background: rgba(15,13,6,0.85);
+  backdrop-filter: blur(20px) saturate(1.2);
+  border-bottom-color: var(--amber-dim);
+}
+.nav-logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  color: var(--amber-vivid);
+  text-shadow: var(--glow-neon);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: var(--transition-normal);
+}
+.nav-logo:hover { color: var(--amber-hot); }
+.nav-logo .logo-p {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--amber-bright);
+  border-radius: 8px;
+  font-size: 1.2rem;
+  box-shadow: var(--glow-neon);
+  transition: var(--transition-normal);
+}
+.nav-logo:hover .logo-p {
+  box-shadow: var(--glow-intense);
+  border-color: var(--amber-vivid);
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  list-style: none;
+}
+.nav-links a {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 1rem;
+  color: var(--amber-hot);
+  text-decoration: none;
+  position: relative;
+  transition: var(--transition-normal);
+  letter-spacing: 0.03em;
+}
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--amber-bright);
+  box-shadow: var(--glow-subtle);
+  transition: width 0.3s var(--ease-smooth);
+}
+.nav-links a:hover {
+  color: var(--amber-white);
+  text-shadow: var(--glow-text);
+}
+.nav-links a:hover::after { width: 100%; }
+
+.nav-cta {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  padding: 0.6rem 1.4rem;
+  border: 1px solid var(--amber-bright);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--amber-white) !important;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  text-decoration: none;
+}
+.nav-cta::after { display: none !important; }
+.nav-cta:hover {
+  background: var(--amber-core);
+  box-shadow: var(--glow-medium);
+  border-color: var(--amber-vivid);
+}
+
+/* Mobile menu */
+.menu-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  z-index: 1002;
+}
+.menu-toggle span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--amber-vivid);
+  border-radius: 2px;
+  transition: var(--transition-normal);
+}
+.menu-toggle.active span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+.menu-toggle.active span:nth-child(2) { opacity: 0; }
+.menu-toggle.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.95);
+  backdrop-filter: blur(30px);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+.mobile-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.mobile-overlay a {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.5rem;
+  color: var(--amber-hot);
+  text-decoration: none;
+  transition: var(--transition-normal);
+  letter-spacing: 0.08em;
+}
+.mobile-overlay a:hover {
+  color: var(--amber-white);
+  text-shadow: var(--glow-neon);
+}
+
+/* ============ HERO ============ */
+
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 6rem 2rem 4rem;
+}
+#heroCanvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.hero-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 1200px;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--amber-dim);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--amber-hot);
+  letter-spacing: 0.08em;
+  margin-bottom: 2rem;
+  animation: fadeInDown 1s 0.2s both;
+}
+.hero-badge .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--amber-bright);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--amber-bright);
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+.hero-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2.5rem, 7vw, 6rem);
+  line-height: 1.05;
+  color: var(--amber-white);
+  text-shadow: var(--glow-neon);
+  margin-bottom: 1rem;
+  letter-spacing: 0.04em;
+}
+.hero-title .char {
+  display: inline-block;
+  animation: charReveal 0.6s both;
+  animation-delay: var(--d);
+}
+@keyframes charReveal {
+  0% { opacity: 0; transform: translateY(40px) rotateX(90deg); filter: blur(10px); }
+  100% { opacity: 1; transform: translateY(0) rotateX(0); filter: blur(0); }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-tagline {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  color: var(--amber-vivid);
+  text-shadow: var(--glow-text);
+  margin-bottom: 1rem;
+  letter-spacing: 0.06em;
+  animation: fadeInUp 0.8s 1s both;
+}
+.hero-sub {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(0.95rem, 1.5vw, 1.15rem);
+  color: var(--amber-hot);
+  opacity: 0.8;
+  max-width: 650px;
+  margin: 0 auto 2.5rem;
+  line-height: 1.6;
+  animation: fadeInUp 0.8s 1.2s both;
+}
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 3rem;
+  animation: fadeInUp 0.8s 1.4s both;
+}
+.btn-primary {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  padding: 1rem 2.5rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--amber-core), var(--amber-bright));
+  color: var(--bg-void);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.3s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--amber-bright), var(--amber-vivid));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.btn-primary:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: var(--glow-intense);
+}
+.btn-primary:hover::before { opacity: 1; }
+.btn-primary:active { transform: translateY(0) scale(0.97); }
+.btn-primary span { position: relative; z-index: 1; }
+.btn-primary svg { position: relative; z-index: 1; }
+
+.btn-secondary {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  padding: 1rem 2rem;
+  border: 1px solid var(--amber-muted);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--amber-hot);
+  cursor: pointer;
+  transition: var(--transition-normal);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.btn-secondary:hover {
+  border-color: var(--amber-bright);
+  color: var(--amber-white);
+  box-shadow: var(--glow-medium);
+  background: rgba(212,160,6,0.1);
+}
+
+/* ============ APP MOCKUP ============ */
+
+.mockup-container {
+  animation: fadeInUp 1s 1.6s both;
+  perspective: 1200px;
+  margin-bottom: 2rem;
+}
+.app-mockup {
+  background: var(--bg-surface);
+  border: 1px solid var(--amber-dim);
+  border-radius: 16px;
+  box-shadow: var(--glow-intense), 0 30px 80px rgba(0,0,0,0.8);
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  overflow: hidden;
+  transform: rotateX(4deg) scale(0.95);
+  transition: transform 0.6s var(--ease-smooth);
+}
+.app-mockup:hover {
+  transform: rotateX(0) scale(1);
+}
+
+.mock-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background: rgba(25,20,6,0.9);
+  border-bottom: 1px solid var(--amber-dim);
+}
+.mock-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mock-titlebar-logo {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.55rem;
+  color: var(--amber-vivid);
+  text-shadow: var(--glow-text);
+  letter-spacing: 0.15em;
+}
+.mock-dots {
+  display: flex;
+  gap: 6px;
+}
+.mock-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--amber-dim);
+}
+.mock-dots span:nth-child(1) { background: rgba(212,160,6,0.3); }
+.mock-dots span:nth-child(2) { background: rgba(212,160,6,0.5); }
+.mock-dots span:nth-child(3) { background: rgba(255,68,102,0.5); border-color: rgba(255,68,102,0.3); }
+
+.mock-body {
+  display: grid;
+  grid-template-columns: 200px 1fr 220px;
+  height: 340px;
+}
+
+/* Source face panel */
+.mock-source-panel {
+  background: var(--bg-surface);
+  border-right: 1px solid var(--amber-dim);
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.mock-panel-label {
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  color: var(--amber-vivid);
+  letter-spacing: 0.15em;
+  margin-bottom: 0.2rem;
+}
+.mock-face-slot {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  background: var(--bg-void);
+  border: 1px dashed var(--amber-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.mock-face-mesh {
+  width: 80%;
+  height: 80%;
+  position: relative;
+}
+.mock-face-mesh svg {
+  width: 100%;
+  height: 100%;
+  stroke: var(--amber-bright);
+  fill: none;
+  stroke-width: 0.5;
+  opacity: 0.6;
+  animation: face-pulse 3s ease-in-out infinite;
+}
+@keyframes face-pulse {
+  0%, 100% { opacity: 0.4; filter: drop-shadow(0 0 2px rgba(238,211,34,0.3)); }
+  50% { opacity: 0.8; filter: drop-shadow(0 0 8px rgba(238,211,34,0.6)); }
+}
+.mock-face-label {
+  font-family: var(--font-mono);
+  font-size: 0.45rem;
+  color: var(--amber-muted);
+  letter-spacing: 0.1em;
+  margin-top: 0.3rem;
+  text-align: center;
+}
+.mock-swap-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+}
+.mock-swap-arrow svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--amber-bright);
+  fill: none;
+  stroke-width: 1.5;
+  animation: arrow-pulse 2s infinite;
+}
+@keyframes arrow-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(238,211,34,0.6)); }
+}
+
+/* Live preview */
+.mock-preview {
+  background: var(--bg-void);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.mock-preview-feed {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mock-preview-feed canvas {
+  width: 100%;
+  height: 100%;
+}
+.mock-fps-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  color: var(--amber-bright);
+  background: rgba(0,0,0,0.7);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--amber-dim);
+  z-index: 2;
+}
+.mock-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-raised);
+  border-top: 1px solid var(--amber-dim);
+  font-family: var(--font-mono);
+  font-size: 0.42rem;
+  color: var(--amber-muted);
+}
+.mock-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #22C55E;
+  box-shadow: 0 0 6px #22C55E;
+  animation: pulse-dot 2s infinite;
+}
+
+/* Controls panel */
+.mock-controls-panel {
+  background: var(--bg-surface);
+  border-left: 1px solid var(--amber-dim);
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+.mock-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.mock-control-label {
+  font-family: var(--font-display);
+  font-size: 0.4rem;
+  color: var(--amber-muted);
+  letter-spacing: 0.12em;
+}
+.mock-control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.mock-toggle {
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--amber-dim);
+  position: relative;
+  flex-shrink: 0;
+}
+.mock-toggle.on {
+  background: var(--amber-core);
+  box-shadow: 0 0 8px rgba(212,160,6,0.4);
+}
+.mock-toggle::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--amber-white);
+  top: 2px;
+  left: 2px;
+  transition: var(--transition-fast);
+}
+.mock-toggle.on::after {
+  left: 14px;
+}
+.mock-toggle-text {
+  font-family: var(--font-body);
+  font-size: 0.5rem;
+  color: var(--amber-hot);
+}
+.mock-slider-track {
+  flex: 1;
+  height: 3px;
+  background: var(--amber-dim);
+  border-radius: 2px;
+  position: relative;
+}
+.mock-slider-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--amber-bright);
+  box-shadow: 0 0 4px rgba(238,211,34,0.4);
+}
+.mock-slider-value {
+  font-family: var(--font-mono);
+  font-size: 0.42rem;
+  color: var(--amber-bright);
+  min-width: 20px;
+  text-align: right;
+}
+.mock-preset-btn {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--amber-dim);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.4rem;
+  color: var(--amber-muted);
+  background: transparent;
+}
+.mock-preset-btn.active {
+  border-color: var(--amber-bright);
+  color: var(--amber-bright);
+  background: rgba(212,160,6,0.1);
+  box-shadow: 0 0 6px rgba(212,160,6,0.2);
+}
+
+/* Scroll indicator */
+.scroll-indicator {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  animation: scroll-bounce 2s infinite;
+}
+.scroll-indicator svg {
+  width: 24px;
+  height: 24px;
+  stroke: var(--amber-muted);
+  fill: none;
+  stroke-width: 1.5;
+}
+@keyframes scroll-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.5; }
+  50% { transform: translateX(-50%) translateY(10px); opacity: 1; }
+}
+
+/* Click ripple */
+.click-ripple { position:fixed; border-radius:50%; background:radial-gradient(circle,rgba(238,211,34,0.3),transparent 70%); pointer-events:none; z-index:99998; animation:ripple-out 0.6s ease-out forwards; }
+@keyframes ripple-out { 0%{width:0;height:0;opacity:1;} 100%{width:300px;height:300px;opacity:0;} }
+
+/* ============ SECTION LAYOUT ============ */
+
+.section {
+  padding: clamp(4rem, 10vw, 8rem) clamp(1.5rem, 5vw, 4rem);
+  position: relative;
+}
+.section-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--amber-bright);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.section-label::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: var(--amber-bright);
+  box-shadow: 0 0 8px rgba(238,211,34,0.5);
+}
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  color: var(--amber-white);
+  text-shadow: var(--glow-text);
+  margin-bottom: 1rem;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+}
+.section-desc {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  color: var(--amber-hot);
+  opacity: 0.8;
+  max-width: 600px;
+  line-height: 1.6;
+  margin-bottom: 3rem;
+}
+
+/* ============ HOW IT WORKS — STEP CARDS ============ */
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+}
+.step-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--amber-dim);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: var(--transition-normal);
+  cursor: default;
+  position: relative;
+}
+.step-card:hover {
+  border-color: var(--amber-muted);
+  box-shadow: var(--glow-medium);
+  transform: translateY(-4px);
+}
+.step-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--amber-bright), transparent);
+  opacity: 0;
+  transition: var(--transition-normal);
+}
+.step-card:hover::before { opacity: 1; }
+.step-preview {
+  height: 160px;
+  background: var(--bg-void);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step-preview canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.step-number {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--amber-muted);
+  letter-spacing: 0.15em;
+  z-index: 2;
+}
+.step-info {
+  padding: 1rem 1.25rem;
+}
+.step-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--amber-white);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.3rem;
+}
+.step-desc {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--amber-muted);
+  line-height: 1.4;
+}
+
+/* ============ FEATURES ============ */
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+.feature-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--amber-dim);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--amber-bright), transparent);
+  opacity: 0;
+  transition: var(--transition-normal);
+}
+.feature-card:hover {
+  border-color: var(--amber-muted);
+  box-shadow: var(--glow-medium);
+  transform: translateY(-3px);
+}
+.feature-card:hover::before { opacity: 1; }
+
+.feature-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(212,160,6,0.15);
+  border: 1px solid var(--amber-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  transition: var(--transition-normal);
+}
+.feature-card:hover .feature-icon {
+  border-color: var(--amber-muted);
+  box-shadow: var(--glow-subtle);
+  background: rgba(212,160,6,0.25);
+}
+.feature-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: var(--amber-bright);
+  fill: none;
+  stroke-width: 1.5;
+}
+.feature-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--amber-white);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+.feature-text {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--amber-muted);
+  line-height: 1.5;
+}
+
+/* ============ TECH STACK ============ */
+
+.tech-section {
+  background: var(--bg-surface);
+  border-top: 1px solid var(--amber-dim);
+  border-bottom: 1px solid var(--amber-dim);
+}
+.tech-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+.tech-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.2rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--amber-dim);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--amber-hot);
+  transition: var(--transition-normal);
+  cursor: default;
+}
+.tech-badge:hover {
+  border-color: var(--amber-muted);
+  box-shadow: var(--glow-medium);
+  color: var(--amber-white);
+  transform: translateY(-2px);
+}
+.tech-badge .tech-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber-bright);
+  box-shadow: 0 0 6px var(--amber-bright);
+}
+
+/* Architecture diagram */
+.arch-diagram {
+  margin-top: 3rem;
+  padding: 2rem;
+  background: var(--bg-void);
+  border: 1px solid var(--amber-dim);
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--amber-hot);
+  overflow-x: auto;
+}
+.arch-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.arch-box {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--amber-dim);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  text-align: center;
+  transition: var(--transition-normal);
+  white-space: nowrap;
+}
+.arch-box:hover {
+  border-color: var(--amber-bright);
+  box-shadow: var(--glow-subtle);
+}
+.arch-box.highlight {
+  border-color: var(--amber-bright);
+  box-shadow: var(--glow-medium);
+  color: var(--amber-white);
+}
+.arch-arrow {
+  color: var(--amber-muted);
+  font-size: 1rem;
+}
+
+/* ============ PERFORMANCE PIPELINE ============ */
+
+.perf-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
+  margin: 2rem 0;
+}
+.perf-node {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.8rem 1.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--amber-dim);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--amber-hot);
+  transition: var(--transition-normal);
+  width: fit-content;
+}
+.perf-node:hover {
+  border-color: var(--amber-bright);
+  box-shadow: var(--glow-medium);
+  color: var(--amber-white);
+}
+.perf-node .node-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--amber-bright);
+  box-shadow: 0 0 8px var(--amber-bright);
+  flex-shrink: 0;
+}
+.perf-node .perf-time {
+  font-size: 0.7rem;
+  color: var(--amber-vivid);
+  margin-left: auto;
+  padding-left: 1rem;
+}
+.perf-connector {
+  width: 1px;
+  height: 24px;
+  background: linear-gradient(to bottom, var(--amber-dim), var(--amber-bright), var(--amber-dim));
+}
+.perf-total {
+  margin-top: 2rem;
+  padding: 1rem 2rem;
+  border: 2px solid var(--amber-bright);
+  border-radius: 10px;
+  background: rgba(212,160,6,0.08);
+  box-shadow: var(--glow-intense);
+  text-align: center;
+}
+.perf-total-label {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  color: var(--amber-vivid);
+  letter-spacing: 0.15em;
+  margin-bottom: 0.3rem;
+}
+.perf-total-value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--amber-white);
+  text-shadow: var(--glow-neon);
+  letter-spacing: 0.05em;
+}
+.perf-total-sub {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--amber-muted);
+  margin-top: 0.2rem;
+}
+
+/* ============ DOWNLOAD CTA ============ */
+
+.download-section {
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.download-section::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 600px;
+  height: 600px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(212,160,6,0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+.download-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.8rem, 4vw, 3.2rem);
+  color: var(--amber-white);
+  text-shadow: var(--glow-neon);
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+.download-sub {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  color: var(--amber-hot);
+  opacity: 0.8;
+  margin-bottom: 2.5rem;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+.download-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+.btn-download {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  padding: 1.2rem 3rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--amber-core), var(--amber-bright));
+  color: var(--bg-void);
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.3s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  position: relative;
+  overflow: hidden;
+}
+.btn-download::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--amber-bright), var(--amber-vivid));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.btn-download:hover {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: var(--glow-intense), 0 20px 50px rgba(212,160,6,0.3);
+}
+.btn-download:hover::before { opacity: 1; }
+.btn-download span, .btn-download svg { position: relative; z-index: 1; }
+
+.sys-req {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--amber-muted);
+  line-height: 1.8;
+  margin-top: 2rem;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--amber-vivid);
+  text-decoration: none;
+  transition: var(--transition-normal);
+}
+.github-link:hover {
+  color: var(--amber-white);
+  text-shadow: var(--glow-text);
+}
+.github-link svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.companion-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--amber-vivid);
+  text-decoration: none;
+  transition: var(--transition-normal);
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--amber-dim);
+  border-radius: 8px;
+}
+.companion-link:hover {
+  color: var(--amber-white);
+  text-shadow: var(--glow-text);
+  border-color: var(--amber-muted);
+  background: rgba(212,160,6,0.08);
+  box-shadow: var(--glow-subtle);
+}
+
+/* ============ FOOTER ============ */
+
+.footer {
+  border-top: 1px solid var(--amber-dim);
+  padding: 3rem 2rem;
+}
+.footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.footer-logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--amber-vivid);
+  text-shadow: var(--glow-text);
+  letter-spacing: 0.1em;
+}
+.footer-tagline {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--amber-muted);
+  font-style: italic;
+}
+.footer-links {
+  display: flex;
+  gap: 2rem;
+  list-style: none;
+  flex-wrap: wrap;
+}
+.footer-links a {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--amber-hot);
+  text-decoration: none;
+  transition: var(--transition-normal);
+}
+.footer-links a:hover {
+  color: var(--amber-white);
+  text-shadow: var(--glow-text);
+}
+.footer-copy {
+  width: 100%;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--amber-dim);
+  margin-top: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(54,27,13,0.4);
+}
+
+/* ============ RESPONSIVE ============ */
+
+@media (max-width: 1024px) {
+  .steps-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mock-body {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .mock-source-panel { display: none; }
+  .mock-controls-panel { display: none; }
+  .mock-preview { min-height: 240px; }
+}
+
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .menu-toggle { display: flex; }
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+  .footer-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+  .footer-links {
+    justify-content: center;
+  }
+  .steps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero { padding-top: 5rem; padding-left: 1rem; padding-right: 1rem; }
+  .hero-sub { max-width: 100%; padding: 0 0.5rem; }
+  .hero-tagline { letter-spacing: 0.02em; }
+  .hero-badge { font-size: 0.55rem; letter-spacing: 0.06em; padding: 0.4rem 0.8rem; }
+  .app-mockup { border-radius: 10px; }
+  .section { padding-left: 1rem; padding-right: 1rem; }
+  .section-title { word-break: break-word; }
+  .section-desc { font-size: 0.95rem; }
+  .btn-primary, .btn-secondary { font-size: 0.75rem; padding: 0.8rem 1.5rem; letter-spacing: 0.06em; }
+  .btn-download { font-size: 0.8rem; padding: 0.9rem 1.8rem; }
+  .arch-diagram { padding: 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .arch-box { white-space: normal; font-size: 0.65rem; padding: 0.4rem 0.6rem; }
+  .arch-row { flex-wrap: wrap; gap: 0.3rem; }
+  .perf-node { font-size: 0.7rem; padding: 0.6rem 1rem; max-width: 100%; }
+  .tech-badge { font-size: 0.7rem; padding: 0.5rem 0.8rem; }
+  .feature-card { padding: 1.25rem; }
+  .feature-title { font-size: 0.8rem; }
+  .feature-text { font-size: 0.82rem; }
+  .step-preview { height: 130px; }
+  .step-info { padding: 0.8rem 1rem; }
+  .step-name { font-size: 0.78rem; }
+  .step-desc { font-size: 0.78rem; }
+  .download-title { word-break: break-word; }
+  .footer-inner { padding: 0 0.5rem; }
+  .footer-links { gap: 0.8rem; font-size: 0.75rem; }
+  .footer-tagline { font-size: 0.7rem; }
+  .github-link { font-size: 0.8rem; }
+}
+
+@media (max-width: 380px) {
+  .hero-title { letter-spacing: -0.01em; }
+  .hero-buttons { flex-direction: column; align-items: center; gap: 0.6rem; }
+  .btn-primary, .btn-secondary { width: 100%; justify-content: center; font-size: 0.7rem; }
+  .btn-download { width: 100%; justify-content: center; }
+  .section { padding-left: 0.75rem; padding-right: 0.75rem; }
+  .nav { padding: 0 0.75rem; }
+  .tech-grid { gap: 0.5rem; }
+  .tech-badge { font-size: 0.6rem; padding: 0.4rem 0.6rem; }
+  .arch-box { font-size: 0.55rem; padding: 0.3rem 0.5rem; }
+}
+
+/* ============ CUSTOM CURSOR GLOW ============ */
+.cursor-glow {
+  position: fixed;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,160,6,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.3s;
+}
+
+</style>
+</head>
+<body>
+
+<div class="cursor-glow" id="cursorGlow"></div>
+
+<!-- ============ NAVIGATION ============ -->
+<nav class="nav" id="nav">
+  <a href="#" class="nav-logo">
+    <span class="logo-p">F</span>
+    ACELESS
+  </a>
+  <ul class="nav-links">
+    <li><a href="#how-it-works">How It Works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#tech">Tech</a></li>
+    <li><a href="#performance">Performance</a></li>
+    <li><a href="#download" class="nav-cta">DOWNLOAD</a></li>
+  </ul>
+  <button class="menu-toggle" id="menuToggle" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<div class="mobile-overlay" id="mobileMenu">
+  <a href="#how-it-works" onclick="closeMobile()">HOW IT WORKS</a>
+  <a href="#features" onclick="closeMobile()">FEATURES</a>
+  <a href="#tech" onclick="closeMobile()">TECH</a>
+  <a href="#performance" onclick="closeMobile()">PERFORMANCE</a>
+  <a href="#download" onclick="closeMobile()">DOWNLOAD</a>
+</div>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="hero">
+  <canvas id="heroCanvas"></canvas>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      VERSION 1.0 — GPU ACCELERATED
+    </div>
+    <h1 class="hero-title" id="heroTitle"></h1>
+    <p class="hero-tagline">Your face. Their face. No one's face. 30fps.</p>
+    <p class="hero-sub">GPU-accelerated real-time face swapping at 30fps+. CUDA-optimized pipeline. Electron UI. Virtual camera output. Become anyone.</p>
+    <div class="hero-buttons">
+      <a href="https://github.com/EmperorBadussy/faceless/releases" class="btn-primary" target="_blank">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>DOWNLOAD FOR WINDOWS</span>
+      </a>
+      <a href="https://github.com/EmperorBadussy/faceless" class="btn-secondary" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        <span>VIEW SOURCE</span>
+      </a>
+    </div>
+    <div class="mockup-container">
+      <div class="app-mockup">
+        <div class="mock-titlebar">
+          <div class="mock-titlebar-left">
+            <span class="mock-titlebar-logo">FACELESS</span>
+          </div>
+          <div class="mock-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+        <div class="mock-body">
+          <!-- Source Face Panel -->
+          <div class="mock-source-panel">
+            <div class="mock-panel-label">SOURCE FACE</div>
+            <div class="mock-face-slot">
+              <div class="mock-face-mesh">
+                <svg viewBox="0 0 100 120">
+                  <ellipse cx="50" cy="55" rx="35" ry="45"/>
+                  <circle cx="35" cy="45" r="5"/>
+                  <circle cx="65" cy="45" r="5"/>
+                  <path d="M40 75 Q50 85 60 75"/>
+                  <line x1="50" y1="10" x2="50" y2="25"/>
+                  <line x1="30" y1="55" x2="15" y2="55"/>
+                  <line x1="70" y1="55" x2="85" y2="55"/>
+                  <path d="M25 35 Q35 28 45 35"/>
+                  <path d="M55 35 Q65 28 75 35"/>
+                  <line x1="42" y1="55" x2="50" y2="65"/>
+                  <line x1="58" y1="55" x2="50" y2="65"/>
+                </svg>
+              </div>
+            </div>
+            <div class="mock-face-label">FACE_REF_001.JPG</div>
+            <div class="mock-swap-arrow">
+              <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="mock-panel-label" style="font-size:0.42rem;color:var(--amber-muted);">Drop image or click to select</div>
+          </div>
+
+          <!-- Live Preview -->
+          <div class="mock-preview">
+            <div class="mock-preview-feed">
+              <canvas id="mockPreviewCanvas"></canvas>
+              <div class="mock-fps-badge">31.2 FPS</div>
+            </div>
+            <div class="mock-status-bar">
+              <span class="mock-status-dot"></span>
+              <span>LIVE</span>
+              <span style="margin-left:auto;">CUDA:0 RTX 4070 &bull; 854x480 &rarr; 1920x1080</span>
+            </div>
+          </div>
+
+          <!-- Controls Panel -->
+          <div class="mock-controls-panel">
+            <div class="mock-panel-label">CONTROLS</div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">QUALITY PRESET</div>
+              <div class="mock-control-row">
+                <div class="mock-preset-btn active">NORMAL</div>
+                <div class="mock-preset-btn">HIGH</div>
+              </div>
+            </div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">FACE SWAP</div>
+              <div class="mock-control-row">
+                <div class="mock-toggle on"></div>
+                <span class="mock-toggle-text">Enabled</span>
+              </div>
+            </div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">GPEN ENHANCE</div>
+              <div class="mock-control-row">
+                <div class="mock-toggle on"></div>
+                <span class="mock-toggle-text">BFR-256</span>
+              </div>
+            </div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">VIRTUAL CAMERA</div>
+              <div class="mock-control-row">
+                <div class="mock-toggle on"></div>
+                <span class="mock-toggle-text">OBS VCam</span>
+              </div>
+            </div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">MANY FACES</div>
+              <div class="mock-control-row">
+                <div class="mock-toggle"></div>
+                <span class="mock-toggle-text">Off</span>
+              </div>
+            </div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">COLOR CORRECT</div>
+              <div class="mock-control-row">
+                <div class="mock-toggle on"></div>
+                <span class="mock-toggle-text">On</span>
+              </div>
+            </div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">OPACITY</div>
+              <div class="mock-control-row">
+                <div class="mock-slider-track"><div class="mock-slider-fill" style="width:85%"></div></div>
+                <span class="mock-slider-value">85%</span>
+              </div>
+            </div>
+
+            <div class="mock-control-group">
+              <div class="mock-control-label">SHARPNESS</div>
+              <div class="mock-control-row">
+                <div class="mock-slider-track"><div class="mock-slider-fill" style="width:40%"></div></div>
+                <span class="mock-slider-value">0.4</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-indicator">
+    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section" id="how-it-works">
+  <div class="section-inner">
+    <div class="section-label reveal">01 // THE MASK</div>
+    <h2 class="section-title reveal">Become Anyone in Real Time</h2>
+    <p class="section-desc reveal">Four stages in the pipeline. From source face to virtual camera. The mask applies itself.</p>
+
+    <div class="steps-grid">
+      <div class="step-card reveal-scale" style="transition-delay:0.05s">
+        <div class="step-preview">
+          <canvas class="step-canvas" data-step="select"></canvas>
+          <div class="step-number">01</div>
+        </div>
+        <div class="step-info">
+          <div class="step-name">SELECT</div>
+          <div class="step-desc">Choose a source face from any image. The neural network extracts and maps the face embedding.</div>
+        </div>
+      </div>
+
+      <div class="step-card reveal-scale" style="transition-delay:0.15s">
+        <div class="step-preview">
+          <canvas class="step-canvas" data-step="capture"></canvas>
+          <div class="step-number">02</div>
+        </div>
+        <div class="step-info">
+          <div class="step-name">CAPTURE</div>
+          <div class="step-desc">Camera feed captured at 1080p/30fps. RetinaFace detects faces asynchronously in real time.</div>
+        </div>
+      </div>
+
+      <div class="step-card reveal-scale" style="transition-delay:0.25s">
+        <div class="step-preview">
+          <canvas class="step-canvas" data-step="swap"></canvas>
+          <div class="step-number">03</div>
+        </div>
+        <div class="step-info">
+          <div class="step-name">SWAP</div>
+          <div class="step-desc">inswapper_128 replaces faces at 480p. GPEN-BFR-256 enhances. Upscaled back to 1080p.</div>
+        </div>
+      </div>
+
+      <div class="step-card reveal-scale" style="transition-delay:0.35s">
+        <div class="step-preview">
+          <canvas class="step-canvas" data-step="output"></canvas>
+          <div class="step-number">04</div>
+        </div>
+        <div class="step-info">
+          <div class="step-name">OUTPUT</div>
+          <div class="step-desc">Feed to Discord, Zoom, OBS via virtual camera. Live preview in the Electron UI.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="section" id="features">
+  <div class="section-inner">
+    <div class="section-label reveal">02 // FEATURES</div>
+    <h2 class="section-title reveal">The Engine Under the Mask</h2>
+    <p class="section-desc reveal">Every tool engineered for speed. Every feature built for the real-time pipeline.</p>
+
+    <div class="features-grid">
+      <div class="feature-card reveal" style="transition-delay:0.05s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div class="feature-title">CUDA GPU ACCELERATION</div>
+        <div class="feature-text">ONNX Runtime CUDA Execution Provider. Full GPU-accelerated inference pipeline on NVIDIA RTX hardware.</div>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay:0.1s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div class="feature-title">RESOLUTION-DECOUPLED</div>
+        <div class="feature-text">Capture at 1080p, process at 480p, output at 1080p. Eliminates the biggest bottleneck while keeping quality.</div>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay:0.15s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="feature-title">GPEN FACE ENHANCEMENT</div>
+        <div class="feature-text">GPEN-BFR-256 neural face restoration. Adds ~5ms per frame for dramatically improved face quality.</div>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay:0.2s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+        <div class="feature-title">VIRTUAL CAMERA OUTPUT</div>
+        <div class="feature-text">Feed swapped video to Discord, Zoom, OBS, or any app via pyvirtualcam. Seamless integration.</div>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay:0.25s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="feature-title">MULTI-FACE SUPPORT</div>
+        <div class="feature-text">Swap multiple faces simultaneously in the same frame. Every detected face gets processed.</div>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay:0.3s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+        <div class="feature-title">QUALITY PRESETS</div>
+        <div class="feature-text">NORMAL mode for balanced 30fps. HIGH mode for maximum quality. Tune for your hardware.</div>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay:0.35s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <div class="feature-title">POST-PROCESSING SUITE</div>
+        <div class="feature-text">Color correction, mouth masking, sharpening, opacity control. Fine-tune every aspect of the swap.</div>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay:0.4s">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="feature-title">WEBSOCKET ARCHITECTURE</div>
+        <div class="feature-text">Decoupled Python backend + Electron frontend. JSON control messages. Binary JPEG frame streaming.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TECH STACK ============ -->
+<section class="section tech-section" id="tech">
+  <div class="section-inner" style="text-align:center;">
+    <div class="section-label reveal" style="justify-content:center;">03 // TECH STACK</div>
+    <h2 class="section-title reveal" style="margin-left:auto;margin-right:auto;">Forged in CUDA Fire</h2>
+    <p class="section-desc reveal" style="margin-left:auto;margin-right:auto;">A decoupled architecture. Python inference backend. React Electron frontend. Connected by WebSockets.</p>
+
+    <div class="tech-grid reveal">
+      <div class="tech-badge"><span class="tech-dot"></span>Python 3.12</div>
+      <div class="tech-badge"><span class="tech-dot"></span>ONNX Runtime CUDA</div>
+      <div class="tech-badge"><span class="tech-dot"></span>React 19</div>
+      <div class="tech-badge"><span class="tech-dot"></span>Electron</div>
+      <div class="tech-badge"><span class="tech-dot"></span>TypeScript</div>
+      <div class="tech-badge"><span class="tech-dot"></span>Tailwind CSS 4</div>
+      <div class="tech-badge"><span class="tech-dot"></span>InsightFace</div>
+      <div class="tech-badge"><span class="tech-dot"></span>WebSockets</div>
+      <div class="tech-badge"><span class="tech-dot"></span>Zustand</div>
+    </div>
+
+    <div class="arch-diagram reveal">
+      <div style="text-align:center;margin-bottom:1rem;color:var(--amber-vivid);font-size:0.8rem;letter-spacing:0.15em;">ARCHITECTURE</div>
+      <div class="arch-row">
+        <div class="arch-box highlight">ELECTRON UI (React 19 + TypeScript)</div>
+      </div>
+      <div class="arch-row"><span class="arch-arrow">&#x2193;</span></div>
+      <div class="arch-row">
+        <div class="arch-box highlight">WebSocket (ws://127.0.0.1:7865)</div>
+      </div>
+      <div class="arch-row"><span class="arch-arrow">&#x2193;</span></div>
+      <div class="arch-row">
+        <div class="arch-box highlight">Python WebSocket Server</div>
+      </div>
+      <div class="arch-row"><span class="arch-arrow">&#x2193;</span></div>
+      <div class="arch-row">
+        <div class="arch-box">Capture Thread (30fps)</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-box">Detect Thread (async)</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-box">Process Thread (swap+enh)</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-box">Display Thread (encode)</div>
+      </div>
+      <div class="arch-row"><span class="arch-arrow">&#x2193;</span></div>
+      <div class="arch-row">
+        <div class="arch-box">ONNX Runtime CUDA EP</div>
+        <div class="arch-box">pyvirtualcam</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PERFORMANCE ============ -->
+<section class="section" id="performance">
+  <div class="section-inner" style="text-align:center;">
+    <div class="section-label reveal" style="justify-content:center;">04 // PERFORMANCE</div>
+    <h2 class="section-title reveal" style="margin-left:auto;margin-right:auto;">Speed of Deception</h2>
+    <p class="section-desc reveal" style="margin-left:auto;margin-right:auto;">Every millisecond accounted for. Benchmarked on RTX GPU with 1080p webcam input.</p>
+
+    <div class="perf-pipeline reveal">
+      <div class="perf-node"><span class="node-icon"></span>Camera Capture (1920x1080)<span class="perf-time">~2ms</span></div>
+      <div class="perf-connector"></div>
+      <div class="perf-node"><span class="node-icon"></span>Face Detection (RetinaFace ONNX)<span class="perf-time">~3-5ms</span></div>
+      <div class="perf-connector"></div>
+      <div class="perf-node"><span class="node-icon"></span>Downscale to 480p<span class="perf-time">&lt;1ms</span></div>
+      <div class="perf-connector"></div>
+      <div class="perf-node"><span class="node-icon"></span>Face Swap (inswapper_128 CUDA)<span class="perf-time">~5ms</span></div>
+      <div class="perf-connector"></div>
+      <div class="perf-node"><span class="node-icon"></span>Face Enhance (GPEN-BFR-256)<span class="perf-time">~5ms</span></div>
+      <div class="perf-connector"></div>
+      <div class="perf-node"><span class="node-icon"></span>Upscale to 1080p<span class="perf-time">&lt;1ms</span></div>
+      <div class="perf-connector"></div>
+      <div class="perf-node"><span class="node-icon"></span>JPEG Encode + WebSocket Send<span class="perf-time">~3ms</span></div>
+    </div>
+
+    <div class="perf-total reveal">
+      <div class="perf-total-label">TOTAL PIPELINE LATENCY</div>
+      <div class="perf-total-value">~20-30ms</div>
+      <div class="perf-total-sub">30-50 FPS effective &bull; Real-time face swap at full speed</div>
+    </div>
+
+    <div style="margin-top:3rem;" class="reveal">
+      <div style="font-family:var(--font-display);font-size:0.85rem;color:var(--amber-vivid);letter-spacing:0.1em;margin-bottom:1rem;">RESOLUTION VS PERFORMANCE</div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.8rem;justify-content:center;">
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">1080p &bull; ~10fps</div>
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">720p &bull; ~23fps</div>
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-bright);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-vivid);transition:var(--transition-normal);box-shadow:var(--glow-subtle);">480p (default) &bull; ~31fps</div>
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">360p &bull; ~52fps</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DOWNLOAD CTA ============ -->
+<section class="section download-section" id="download">
+  <div class="section-inner">
+    <div class="section-label reveal" style="justify-content:center;">05 // DOWNLOAD</div>
+    <h2 class="download-title reveal">Ready to Wear<br>a New Face?</h2>
+    <p class="download-sub reveal">Free. Open source. The mask awaits.</p>
+
+    <div class="download-buttons reveal">
+      <a href="https://github.com/EmperorBadussy/faceless/releases" class="btn-download" target="_blank">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>DOWNLOAD FOR WINDOWS</span>
+      </a>
+    </div>
+
+    <div class="reveal">
+      <div style="font-family:var(--font-mono);font-size:0.7rem;color:var(--amber-muted);margin-bottom:0.3rem;">v1.0.0 &bull; Windows 10/11 (x64)</div>
+    </div>
+
+    <div class="sys-req reveal">
+      <strong style="color:var(--amber-vivid);">System Requirements</strong><br>
+      Windows 10+ (64-bit) &bull; NVIDIA GPU with CUDA (RTX recommended) &bull; Python 3.12+ &bull; 8GB+ RAM &bull; Node.js 20+
+    </div>
+
+    <a href="https://github.com/EmperorBadussy/faceless" class="github-link reveal" target="_blank">
+      <svg viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+      View on GitHub
+    </a>
+
+    <div style="margin-top: 2rem;" class="reveal">
+      <a href="../hub/" class="companion-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Explore the full suite &rarr; THE SUITE
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">FACELESS</div>
+      <div class="footer-tagline">The mask that moves at the speed of light.</div>
+    </div>
+    <ul class="footer-links">
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#tech">Tech Stack</a></li>
+      <li><a href="#performance">Performance</a></li>
+      <li><a href="#download">Download</a></li>
+      <li><a href="https://github.com/EmperorBadussy/faceless" target="_blank">GitHub</a></li>
+    </ul>
+    <div class="footer-copy">&copy; 2077 FACELESS. Free and open source software.</div>
+  </div>
+</footer>
+
+<script>
+// ============ HERO TITLE CHARACTER ANIMATION ============
+(function() {
+  var title = document.getElementById('heroTitle');
+  var text = 'FACELESS';
+  var html = '';
+  var delay = 0.4;
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] === ' ') {
+      html += ' ';
+    } else {
+      html += '<span class="char" style="--d:' + delay.toFixed(2) + 's">' + text[i] + '</span>';
+      delay += 0.06;
+    }
+  }
+  title.innerHTML = html;
+})();
+
+// ============ HERO CANVAS — NEURAL FACE MESH EFFECT ============
+(function() {
+  var canvas = document.getElementById('heroCanvas');
+  var ctx = canvas.getContext('2d');
+  var w, h, nodes = [], mouse = { x: -999, y: -999 };
+
+  function resize() {
+    w = canvas.width = canvas.offsetWidth;
+    h = canvas.height = canvas.offsetHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Create face mesh nodes (scattered around center forming a loose face shape)
+  for (var i = 0; i < 120; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var radius = Math.random() * 300 + 50;
+    nodes.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 2000,
+      ox: 0, oy: 0,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      size: Math.random() * 2 + 0.5,
+      alpha: Math.random() * 0.5 + 0.15,
+      drift: Math.random() * Math.PI * 2,
+      pulse: Math.random() * Math.PI * 2
+    });
+  }
+
+  document.addEventListener('mousemove', function(e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+
+  function animate(time) {
+    ctx.clearRect(0, 0, w, h);
+
+    // Subtle warm ambient fog
+    var grad = ctx.createRadialGradient(w * 0.5, h * 0.4, 0, w * 0.5, h * 0.4, w * 0.5);
+    grad.addColorStop(0, 'rgba(212, 160, 6, 0.04)');
+    grad.addColorStop(0.5, 'rgba(212, 160, 6, 0.015)');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw scanlines
+    ctx.save();
+    ctx.globalAlpha = 0.015;
+    for (var y = 0; y < h; y += 3) {
+      ctx.fillStyle = 'rgba(212, 160, 6, 1)';
+      ctx.fillRect(0, y, w, 1);
+    }
+    ctx.restore();
+
+    // Update and draw nodes
+    nodes.forEach(function(n) {
+      n.x += n.vx + Math.sin(time * 0.0005 + n.drift) * 0.15;
+      n.y += n.vy + Math.cos(time * 0.0004 + n.drift) * 0.1;
+
+      if (n.x < -20) n.x = w + 20;
+      if (n.x > w + 20) n.x = -20;
+      if (n.y < -20) n.y = h + 20;
+      if (n.y > h + 20) n.y = -20;
+
+      var dx = mouse.x - n.x;
+      var dy = mouse.y - n.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var glow = dist < 200 ? (1 - dist / 200) * 0.6 : 0;
+      var pulse = Math.sin(time * 0.002 + n.pulse) * 0.15 + 0.85;
+
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.size * (1 + glow) * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(249, 232, 103, ' + (n.alpha + glow) * pulse + ')';
+      ctx.fill();
+
+      if (n.size > 1 || glow > 0.1) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.size * 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(238, 211, 34, ' + ((n.alpha + glow) * 0.1) + ')';
+        ctx.fill();
+      }
+    });
+
+    // Draw connections
+    for (var i = 0; i < nodes.length; i++) {
+      for (var j = i + 1; j < nodes.length; j++) {
+        var dx = nodes[i].x - nodes[j].x;
+        var dy = nodes[i].y - nodes[j].y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 130) {
+          ctx.beginPath();
+          ctx.moveTo(nodes[i].x, nodes[i].y);
+          ctx.lineTo(nodes[j].x, nodes[j].y);
+          ctx.strokeStyle = 'rgba(212, 160, 6, ' + (0.1 * (1 - dist / 130)) + ')';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+})();
+
+// ============ MOCK PREVIEW CANVAS ============
+(function() {
+  var canvas = document.getElementById('mockPreviewCanvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  var w = rect.width, h = rect.height;
+
+  var faceNodes = [];
+  var cx = w / 2, cy = h / 2;
+  // Create face mesh points
+  for (var i = 0; i < 60; i++) {
+    var a = Math.random() * Math.PI * 2;
+    var r = Math.random() * 50 + 10;
+    faceNodes.push({
+      x: cx + Math.cos(a) * r,
+      y: cy + Math.sin(a) * r * 1.2,
+      ox: cx + Math.cos(a) * r,
+      oy: cy + Math.sin(a) * r * 1.2,
+      size: 1 + Math.random(),
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+
+  function draw(time) {
+    ctx.clearRect(0, 0, w, h);
+    // Dark feed bg
+    ctx.fillStyle = '#050403';
+    ctx.fillRect(0, 0, w, h);
+
+    // Scanlines
+    ctx.globalAlpha = 0.03;
+    for (var y = 0; y < h; y += 2) {
+      ctx.fillStyle = '#D4A006';
+      ctx.fillRect(0, y, w, 1);
+    }
+    ctx.globalAlpha = 1;
+
+    // Face outline ellipse
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 55, 70, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(238, 211, 34, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Eye outlines
+    ctx.beginPath();
+    ctx.ellipse(cx - 18, cy - 10, 10, 6, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(249, 232, 103, 0.2)';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx + 18, cy - 10, 10, 6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Nose
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 5);
+    ctx.lineTo(cx - 5, cy + 10);
+    ctx.lineTo(cx + 5, cy + 10);
+    ctx.strokeStyle = 'rgba(212, 160, 6, 0.15)';
+    ctx.stroke();
+
+    // Mouth
+    ctx.beginPath();
+    ctx.moveTo(cx - 15, cy + 22);
+    ctx.quadraticCurveTo(cx, cy + 30, cx + 15, cy + 22);
+    ctx.strokeStyle = 'rgba(212, 160, 6, 0.15)';
+    ctx.stroke();
+
+    // Animated face mesh dots
+    faceNodes.forEach(function(n) {
+      var drift = Math.sin(time * 0.002 + n.phase) * 2;
+      var px = n.ox + drift;
+      var py = n.oy + Math.cos(time * 0.0015 + n.phase) * 1.5;
+
+      ctx.beginPath();
+      ctx.arc(px, py, n.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(238, 211, 34, 0.4)';
+      ctx.fill();
+    });
+
+    // Connect nearby face nodes
+    for (var i = 0; i < faceNodes.length; i++) {
+      for (var j = i + 1; j < faceNodes.length; j++) {
+        var dx = faceNodes[i].ox - faceNodes[j].ox;
+        var dy = faceNodes[i].oy - faceNodes[j].oy;
+        var d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 30) {
+          ctx.beginPath();
+          ctx.moveTo(faceNodes[i].ox + Math.sin(time * 0.002 + faceNodes[i].phase) * 2, faceNodes[i].oy);
+          ctx.lineTo(faceNodes[j].ox + Math.sin(time * 0.002 + faceNodes[j].phase) * 2, faceNodes[j].oy);
+          ctx.strokeStyle = 'rgba(212, 160, 6, ' + (0.08 * (1 - d / 30)) + ')';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // "SWAP ACTIVE" overlay indicator
+    ctx.globalAlpha = 0.3 + Math.sin(time * 0.003) * 0.15;
+    ctx.fillStyle = 'rgba(212, 160, 6, 0.08)';
+    ctx.fillRect(0, 0, w, 2);
+    ctx.fillRect(0, h - 2, w, 2);
+    ctx.globalAlpha = 1;
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+
+// ============ STEP CARD CANVAS ANIMATIONS ============
+(function() {
+  var canvases = document.querySelectorAll('.step-canvas');
+  var vizData = [];
+
+  canvases.forEach(function(c) {
+    var rect = c.parentElement.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    c.width = rect.width * dpr;
+    c.height = rect.height * dpr;
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    var w = rect.width, h = rect.height;
+    var data = { c: c, ctx: ctx, w: w, h: h, type: c.dataset.step, hover: false, particles: [] };
+
+    if (data.type === 'select') {
+      for (var i = 0; i < 15; i++) {
+        data.particles.push({ angle: Math.random() * Math.PI * 2, radius: 15 + Math.random() * 25, speed: 0.005 + Math.random() * 0.01, size: 1 + Math.random() * 2, alpha: 0.3 + Math.random() * 0.5 });
+      }
+    } else if (data.type === 'capture') {
+      data.scanY = 0;
+    } else if (data.type === 'swap') {
+      data.progress = 0;
+    } else if (data.type === 'output') {
+      data.rings = [];
+      for (var i = 0; i < 4; i++) {
+        data.rings.push({ radius: 10 + i * 12, alpha: 0.5 - i * 0.1 });
+      }
+    }
+
+    c.parentElement.addEventListener('mouseenter', function() { data.hover = true; });
+    c.parentElement.addEventListener('mouseleave', function() { data.hover = false; });
+
+    vizData.push(data);
+  });
+
+  function animate(time) {
+    vizData.forEach(function(d) {
+      d.ctx.clearRect(0, 0, d.w, d.h);
+      var cx = d.w / 2, cy = d.h / 2;
+      var speed = d.hover ? 2 : 1;
+
+      if (d.type === 'select') {
+        // Face outline
+        d.ctx.beginPath();
+        d.ctx.ellipse(cx, cy, 25, 32, 0, 0, Math.PI * 2);
+        d.ctx.strokeStyle = 'rgba(238, 211, 34, 0.25)';
+        d.ctx.lineWidth = 1;
+        d.ctx.stroke();
+        // Orbiting particles
+        d.particles.forEach(function(p) {
+          p.angle += p.speed * speed;
+          var x = cx + Math.cos(p.angle) * p.radius;
+          var y = cy + Math.sin(p.angle) * p.radius * 1.2;
+          d.ctx.beginPath();
+          d.ctx.arc(x, y, p.size, 0, Math.PI * 2);
+          d.ctx.fillStyle = 'rgba(249, 232, 103, ' + p.alpha + ')';
+          d.ctx.fill();
+        });
+      } else if (d.type === 'capture') {
+        // Camera scan line
+        d.scanY = (d.scanY + 0.5 * speed) % d.h;
+        d.ctx.fillStyle = 'rgba(212, 160, 6, 0.08)';
+        d.ctx.fillRect(0, d.scanY - 20, d.w, 40);
+        d.ctx.fillStyle = 'rgba(238, 211, 34, 0.3)';
+        d.ctx.fillRect(0, d.scanY, d.w, 1);
+        // Grid
+        d.ctx.strokeStyle = 'rgba(212, 160, 6, 0.06)';
+        d.ctx.lineWidth = 0.5;
+        for (var x = 0; x < d.w; x += 20) { d.ctx.beginPath(); d.ctx.moveTo(x, 0); d.ctx.lineTo(x, d.h); d.ctx.stroke(); }
+        for (var y = 0; y < d.h; y += 20) { d.ctx.beginPath(); d.ctx.moveTo(0, y); d.ctx.lineTo(d.w, y); d.ctx.stroke(); }
+        // Detection box
+        var boxPulse = Math.sin(time * 0.003) * 3;
+        d.ctx.strokeStyle = 'rgba(238, 211, 34, 0.4)';
+        d.ctx.lineWidth = 1;
+        d.ctx.strokeRect(cx - 25 - boxPulse, cy - 30 - boxPulse, 50 + boxPulse * 2, 60 + boxPulse * 2);
+      } else if (d.type === 'swap') {
+        d.progress = (d.progress + 0.008 * speed) % 1;
+        // Two face outlines morphing
+        var offset = d.progress * d.w;
+        d.ctx.save();
+        d.ctx.globalAlpha = 1 - d.progress;
+        d.ctx.beginPath();
+        d.ctx.ellipse(cx - 20 + d.progress * 20, cy, 20, 26, 0, 0, Math.PI * 2);
+        d.ctx.strokeStyle = 'rgba(212, 160, 6, 0.3)';
+        d.ctx.lineWidth = 1;
+        d.ctx.stroke();
+        d.ctx.restore();
+        d.ctx.save();
+        d.ctx.globalAlpha = d.progress;
+        d.ctx.beginPath();
+        d.ctx.ellipse(cx + 20 - d.progress * 20, cy, 20, 26, 0, 0, Math.PI * 2);
+        d.ctx.strokeStyle = 'rgba(249, 232, 103, 0.5)';
+        d.ctx.lineWidth = 1;
+        d.ctx.stroke();
+        d.ctx.restore();
+        // Arrow
+        d.ctx.fillStyle = 'rgba(238, 211, 34, 0.4)';
+        d.ctx.beginPath();
+        d.ctx.moveTo(cx + 8, cy - 5);
+        d.ctx.lineTo(cx + 15, cy);
+        d.ctx.lineTo(cx + 8, cy + 5);
+        d.ctx.fill();
+      } else if (d.type === 'output') {
+        // Broadcasting rings
+        d.rings.forEach(function(r, i) {
+          var rScale = 1 + Math.sin(time * 0.003 + i * 0.8) * 0.2;
+          d.ctx.beginPath();
+          d.ctx.arc(cx, cy, r.radius * rScale, 0, Math.PI * 2);
+          d.ctx.strokeStyle = 'rgba(238, 211, 34, ' + (r.alpha * (d.hover ? 1.5 : 1)) + ')';
+          d.ctx.lineWidth = 1;
+          d.ctx.stroke();
+        });
+        // Center dot
+        d.ctx.beginPath();
+        d.ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        d.ctx.fillStyle = 'rgba(249, 232, 103, 0.8)';
+        d.ctx.fill();
+        d.ctx.beginPath();
+        d.ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+        d.ctx.fillStyle = 'rgba(238, 211, 34, 0.15)';
+        d.ctx.fill();
+      }
+    });
+    requestAnimationFrame(animate);
+  }
+  if (vizData.length > 0) requestAnimationFrame(animate);
+})();
+
+// ============ CURSOR GLOW ============
+(function() {
+  var glow = document.getElementById('cursorGlow');
+  var mx = 0, my = 0, cx = 0, cy = 0;
+  document.addEventListener('mousemove', function(e) { mx = e.clientX; my = e.clientY; });
+  function update() {
+    cx += (mx - cx) * 0.08;
+    cy += (my - cy) * 0.08;
+    glow.style.left = cx + 'px';
+    glow.style.top = cy + 'px';
+    requestAnimationFrame(update);
+  }
+  update();
+  if ('ontouchstart' in window) glow.style.display = 'none';
+})();
+
+// ============ NAV SCROLL EFFECT ============
+(function() {
+  var nav = document.getElementById('nav');
+  window.addEventListener('scroll', function() {
+    nav.classList.toggle('scrolled', window.scrollY > 50);
+  });
+})();
+
+// ============ MOBILE MENU ============
+function closeMobile() {
+  document.getElementById('mobileMenu').classList.remove('open');
+  document.getElementById('menuToggle').classList.remove('active');
+}
+document.getElementById('menuToggle').addEventListener('click', function() {
+  this.classList.toggle('active');
+  document.getElementById('mobileMenu').classList.toggle('open');
+});
+
+// ============ SCROLL REVEAL ============
+(function() {
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-scale').forEach(function(el) {
+    observer.observe(el);
+  });
+})();
+
+// ============ CLICK RIPPLE ============
+document.addEventListener('click', function(e) {
+  var ripple = document.createElement('div');
+  ripple.className = 'click-ripple';
+  ripple.style.left = (e.clientX - 150) + 'px';
+  ripple.style.top = (e.clientY - 150) + 'px';
+  document.body.appendChild(ripple);
+  setTimeout(function() { ripple.remove(); }, 600);
+});
+</script>
+</body>
+</html>
