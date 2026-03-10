@@ -1507,6 +1507,9 @@ body::after {
   pointer-events: none;
 }
 
+.hero-tagline[style*="border-right"] { animation: blink-cursor 0.8s step-end infinite !important; }
+@keyframes blink-cursor { 0%, 100% { border-color: var(--amber-vivid); } 50% { border-color: transparent; } }
+
 </style>
 </head>
 <body>
@@ -2737,6 +2740,162 @@ document.addEventListener('click', function(e) {
       }
     });
   });
+})();
+
+// ============ TEXT SCRAMBLE REVEAL ============
+(function() {
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*';
+  var scrambleEls = document.querySelectorAll('.section-title, .download-title');
+  var scrambled = new Set();
+
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting && !scrambled.has(entry.target)) {
+        scrambled.add(entry.target);
+        var el = entry.target;
+        var original = el.textContent;
+        var iterations = 0;
+        var maxIterations = original.length * 3;
+        var interval = setInterval(function() {
+          el.textContent = original.split('').map(function(char, i) {
+            if (i < iterations / 3) return original[i];
+            if (char === ' ' || char === '\n') return char;
+            return chars[Math.floor(Math.random() * chars.length)];
+          }).join('');
+          iterations++;
+          if (iterations > maxIterations) {
+            el.textContent = original;
+            clearInterval(interval);
+          }
+        }, 30);
+      }
+    });
+  }, { threshold: 0.3 });
+
+  scrambleEls.forEach(function(el) { observer.observe(el); });
+})();
+
+// ============ MAGNETIC BUTTONS ============
+(function() {
+  var btns = document.querySelectorAll('.btn-primary, .btn-download');
+  btns.forEach(function(btn) {
+    btn.addEventListener('mousemove', function(e) {
+      var rect = btn.getBoundingClientRect();
+      var x = e.clientX - rect.left - rect.width / 2;
+      var y = e.clientY - rect.top - rect.height / 2;
+      btn.style.transform = 'translate(' + (x * 0.15) + 'px, ' + (y * 0.15) + 'px) scale(1.03)';
+    });
+    btn.addEventListener('mouseleave', function() {
+      btn.style.transform = '';
+      btn.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      setTimeout(function() { btn.style.transition = ''; }, 400);
+    });
+  });
+})();
+
+// ============ 3D TILT CARDS ============
+(function() {
+  var cards = document.querySelectorAll('.feature-card, .step-card');
+  cards.forEach(function(card) {
+    card.addEventListener('mousemove', function(e) {
+      var rect = card.getBoundingClientRect();
+      var x = (e.clientX - rect.left) / rect.width - 0.5;
+      var y = (e.clientY - rect.top) / rect.height - 0.5;
+      card.style.transform = 'perspective(600px) rotateY(' + (x * 8) + 'deg) rotateX(' + (-y * 8) + 'deg) translateY(-4px)';
+      card.style.transition = 'transform 0.1s ease';
+    });
+    card.addEventListener('mouseleave', function() {
+      card.style.transform = '';
+      card.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    });
+  });
+})();
+
+// ============ TYPED TAGLINE ============
+(function() {
+  var el = document.querySelector('.hero-tagline');
+  if (!el) return;
+  var text = el.textContent;
+  el.textContent = '';
+  el.style.borderRight = '2px solid var(--amber-vivid)';
+  el.style.animation = 'none';
+  el.style.opacity = '1';
+  var i = 0;
+  setTimeout(function() {
+    var interval = setInterval(function() {
+      el.textContent = text.substring(0, i + 1);
+      i++;
+      if (i >= text.length) {
+        clearInterval(interval);
+        setTimeout(function() { el.style.borderRight = 'none'; }, 2000);
+      }
+    }, 45);
+  }, 1500);
+})();
+
+// ============ KONAMI CODE EASTER EGG ============
+(function() {
+  var code = [38,38,40,40,37,39,37,39,66,65];
+  var pos = 0;
+  document.addEventListener('keydown', function(e) {
+    if (e.keyCode === code[pos]) {
+      pos++;
+      if (pos === code.length) {
+        pos = 0;
+        // BREACH MODE
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;pointer-events:none;background:rgba(255,0,0,0.08);animation:breachFlash 0.15s infinite;';
+        var style = document.createElement('style');
+        style.textContent = '@keyframes breachFlash{0%,100%{opacity:1}50%{opacity:0.3}} .breach-text{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100000;font-family:var(--font-display);font-size:clamp(2rem,8vw,5rem);color:#ff0033;text-shadow:0 0 20px #ff0033,0 0 60px #ff0033;letter-spacing:0.2em;pointer-events:none;animation:breachGlitch 0.1s infinite;}@keyframes breachGlitch{0%{transform:translate(-50%,-50%)}25%{transform:translate(-48%,-52%)}50%{transform:translate(-52%,-48%)}75%{transform:translate(-50%,-50%) skewX(2deg)}}';
+        document.head.appendChild(style);
+        document.body.appendChild(overlay);
+        var text = document.createElement('div');
+        text.className = 'breach-text';
+        text.textContent = '[ BREACH DETECTED ]';
+        document.body.appendChild(text);
+        document.documentElement.style.filter = 'hue-rotate(180deg) saturate(2)';
+        setTimeout(function() {
+          overlay.remove();
+          text.remove();
+          style.remove();
+          document.documentElement.style.filter = '';
+        }, 3000);
+      }
+    } else {
+      pos = 0;
+    }
+  });
+})();
+
+// ============ MOUSE PARTICLE TRAIL ============
+(function() {
+  var particles = [];
+  document.addEventListener('mousemove', function(e) {
+    if (Math.random() > 0.6) return; // throttle
+    particles.push({ x: e.clientX, y: e.clientY, life: 1, size: Math.random() * 2 + 0.5 });
+  });
+  var trailCanvas = document.createElement('canvas');
+  trailCanvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:99996;pointer-events:none;';
+  document.body.appendChild(trailCanvas);
+  var tctx = trailCanvas.getContext('2d');
+  function resizeTrail() { trailCanvas.width = window.innerWidth; trailCanvas.height = window.innerHeight; }
+  resizeTrail();
+  window.addEventListener('resize', resizeTrail);
+  function drawTrail() {
+    tctx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.life -= 0.025;
+      p.y -= 0.3;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      tctx.beginPath();
+      tctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      tctx.fillStyle = 'rgba(249, 232, 103, ' + (p.life * 0.5) + ')';
+      tctx.fill();
+    }
+    requestAnimationFrame(drawTrail);
+  }
+  drawTrail();
 })();
 </script>
 </body>
