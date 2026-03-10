@@ -1510,9 +1510,85 @@ body::after {
 .hero-tagline[style*="border-right"] { animation: blink-cursor 0.8s step-end infinite !important; }
 @keyframes blink-cursor { 0%, 100% { border-color: var(--amber-vivid); } 50% { border-color: transparent; } }
 
+/* ============ LOADING SCREEN ============ */
+@keyframes loadGlitch {
+  0%, 100% { text-shadow: -2px 0 #EED322, 2px 0 #D4A006; }
+  25% { text-shadow: 2px 0 #EED322, -2px 0 #D4A006; transform: translateX(-1px); }
+  50% { text-shadow: -1px 0 #F9E867, 1px 0 #D4A006; }
+  75% { text-shadow: 1px 0 #EED322, -1px 0 #F9E867; transform: translateX(1px); }
+}
+
+/* ============ COUNTER ANIMATION ============ */
+.count-up { display: inline-block; }
+
+/* ============ DECLASSIFIED MODE ============ */
+body.declassified {
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  background: #000 !important;
+}
+body.declassified * {
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  border-radius: 0 !important;
+  text-shadow: 0 0 1px currentColor !important;
+  box-shadow: none !important;
+}
+body.declassified img, body.declassified canvas { filter: grayscale(1) contrast(1.5) !important; }
+body.declassified .nav, body.declassified .hero, body.declassified section, body.declassified .footer-section {
+  background: #000 !important;
+  border-color: #333 !important;
+}
+body.declassified .feature-card, body.declassified .step-card {
+  background: #000 !important;
+  border: 1px solid #333 !important;
+}
+body.declassified h1, body.declassified h2, body.declassified h3, body.declassified .hero-tagline, body.declassified .section-label {
+  color: #0f0 !important;
+}
+body.declassified p, body.declassified span, body.declassified a, body.declassified li, body.declassified div {
+  color: #0a0 !important;
+}
+body.declassified a:hover { color: #0f0 !important; }
+body.declassified .scroll-progress { background: #0f0 !important; }
+body.declassified .section-divider { background: linear-gradient(90deg, transparent, #0f0, transparent) !important; }
+body.declassified::after { display: none !important; }
+body.declassified #declassifiedToggle { border-color: #0f0; color: #0f0; }
+
+/* ============ COMMAND PALETTE ============ */
+.cmd-item { padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem; cursor: pointer; transition: background 0.15s; border-bottom: 1px solid rgba(100,77,14,0.2); }
+.cmd-item:hover, .cmd-item.active { background: rgba(212,160,6,0.1); }
+.cmd-item-icon { width: 1.5rem; text-align: center; color: #D4A006; font-size: 0.9rem; }
+.cmd-item-label { color: #EED322; font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; flex: 1; }
+.cmd-item-hint { color: #644D0E; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; }
+
+/* ============ PORTAL EFFECT ============ */
+body.portal-out { animation: portalWarp 0.6s ease-in forwards; }
+@keyframes portalWarp {
+  0% { transform: scale(1); filter: brightness(1) blur(0); opacity: 1; }
+  50% { transform: scale(0.98); filter: brightness(2) blur(2px); opacity: 0.8; }
+  100% { transform: scale(0.95) translateY(-20px); filter: brightness(3) blur(8px); opacity: 0; }
+}
+
 </style>
 </head>
 <body>
+
+<div id="loadingScreen" style="position:fixed;inset:0;z-index:99999;background:#0F0D06;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 0.5s,visibility 0.5s">
+  <div style="font-family:'Orbitron',monospace;font-size:clamp(2rem,5vw,3.5rem);color:#D4A006;letter-spacing:0.3em;animation:loadGlitch 0.15s infinite">FACELESS</div>
+  <div style="width:200px;height:2px;background:#191406;margin-top:1.5rem;border-radius:1px;overflow:hidden">
+    <div id="loadBar" style="width:0%;height:100%;background:linear-gradient(90deg,#D4A006,#EED322);transition:width 0.3s"></div>
+  </div>
+</div>
+
+<div id="cmdPalette" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);align-items:flex-start;justify-content:center;padding-top:20vh">
+  <div style="width:min(90vw,520px);background:#191406;border:1px solid #644D0E;border-radius:8px;overflow:hidden;box-shadow:0 25px 60px rgba(0,0,0,0.8)">
+    <div style="padding:1rem;border-bottom:1px solid #644D0E;display:flex;align-items:center;gap:0.75rem">
+      <span style="color:#644D0E;font-family:'JetBrains Mono',monospace;font-size:0.8rem">▶</span>
+      <input id="cmdInput" type="text" placeholder="Type a command..." style="flex:1;background:none;border:none;outline:none;color:#EED322;font-family:'JetBrains Mono',monospace;font-size:0.95rem" autocomplete="off">
+      <kbd style="background:#0F0D06;color:#644D0E;padding:0.15rem 0.4rem;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:0.65rem;border:1px solid #361B0D">ESC</kbd>
+    </div>
+    <div id="cmdResults" style="max-height:300px;overflow-y:auto"></div>
+  </div>
+</div>
 
 <div class="scroll-progress" id="scrollProgress"></div>
 <div class="cursor-glow" id="cursorGlow"></div>
@@ -1530,6 +1606,11 @@ body::after {
     <li><a href="#tech">Tech</a></li>
     <li><a href="#performance">Performance</a></li>
     <li><a href="#download" class="nav-cta">DOWNLOAD</a></li>
+    <li>
+      <button id="declassifiedToggle" title="DECLASSIFIED MODE" style="background:none;border:1px solid var(--amber-muted);color:var(--amber-core);font-family:'JetBrains Mono',monospace;font-size:0.7rem;padding:0.3rem 0.6rem;cursor:pointer;letter-spacing:0.1em;transition:all 0.3s;border-radius:2px">
+        [CLASSIFIED]
+      </button>
+    </li>
   </ul>
   <button class="menu-toggle" id="menuToggle" aria-label="Menu">
     <span></span><span></span><span></span>
@@ -1876,19 +1957,19 @@ body::after {
     <p class="section-desc reveal" style="margin-left:auto;margin-right:auto;">Every millisecond accounted for. Benchmarked on RTX GPU with 1080p webcam input.</p>
 
     <div class="perf-pipeline reveal">
-      <div class="perf-node"><span class="node-icon"></span>Camera Capture (1920x1080)<span class="perf-time">~2ms</span></div>
+      <div class="perf-node"><span class="node-icon"></span>Camera Capture (1920x1080)<span class="perf-time" data-count="2" data-prefix="~" data-suffix="ms">~2ms</span></div>
       <div class="perf-connector"></div>
-      <div class="perf-node"><span class="node-icon"></span>Face Detection (RetinaFace ONNX)<span class="perf-time">~3-5ms</span></div>
+      <div class="perf-node"><span class="node-icon"></span>Face Detection (RetinaFace ONNX)<span class="perf-time" data-count="5" data-prefix="~3-" data-suffix="ms">~3-5ms</span></div>
       <div class="perf-connector"></div>
       <div class="perf-node"><span class="node-icon"></span>Downscale to 480p<span class="perf-time">&lt;1ms</span></div>
       <div class="perf-connector"></div>
-      <div class="perf-node"><span class="node-icon"></span>Face Swap (inswapper_128 CUDA)<span class="perf-time">~5ms</span></div>
+      <div class="perf-node"><span class="node-icon"></span>Face Swap (inswapper_128 CUDA)<span class="perf-time" data-count="5" data-prefix="~" data-suffix="ms">~5ms</span></div>
       <div class="perf-connector"></div>
-      <div class="perf-node"><span class="node-icon"></span>Face Enhance (GPEN-BFR-256)<span class="perf-time">~5ms</span></div>
+      <div class="perf-node"><span class="node-icon"></span>Face Enhance (GPEN-BFR-256)<span class="perf-time" data-count="5" data-prefix="~" data-suffix="ms">~5ms</span></div>
       <div class="perf-connector"></div>
       <div class="perf-node"><span class="node-icon"></span>Upscale to 1080p<span class="perf-time">&lt;1ms</span></div>
       <div class="perf-connector"></div>
-      <div class="perf-node"><span class="node-icon"></span>JPEG Encode + WebSocket Send<span class="perf-time">~3ms</span></div>
+      <div class="perf-node"><span class="node-icon"></span>JPEG Encode + WebSocket Send<span class="perf-time" data-count="3" data-prefix="~" data-suffix="ms">~3ms</span></div>
     </div>
 
     <div class="perf-total reveal">
@@ -1900,10 +1981,10 @@ body::after {
     <div style="margin-top:3rem;" class="reveal">
       <div style="font-family:var(--font-display);font-size:0.85rem;color:var(--amber-vivid);letter-spacing:0.1em;margin-bottom:1rem;">RESOLUTION VS PERFORMANCE</div>
       <div style="display:flex;flex-wrap:wrap;gap:0.8rem;justify-content:center;">
-        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">1080p &bull; ~10fps</div>
-        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">720p &bull; ~23fps</div>
-        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-bright);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-vivid);transition:var(--transition-normal);box-shadow:var(--glow-subtle);">480p (default) &bull; ~31fps</div>
-        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">360p &bull; ~52fps</div>
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">1080p &bull; ~<span data-count="10" data-prefix="" data-suffix="fps">10fps</span></div>
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">720p &bull; ~<span data-count="23" data-prefix="" data-suffix="fps">23fps</span></div>
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-bright);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-vivid);transition:var(--transition-normal);box-shadow:var(--glow-subtle);">480p (default) &bull; ~<span data-count="31" data-prefix="" data-suffix="fps">31fps</span></div>
+        <div style="padding:0.5rem 1rem;background:var(--bg-raised);border:1px solid var(--amber-dim);border-radius:6px;font-family:var(--font-mono);font-size:0.75rem;color:var(--amber-muted);transition:var(--transition-normal);">360p &bull; ~<span data-count="52" data-prefix="" data-suffix="fps">52fps</span></div>
       </div>
     </div>
   </div>
@@ -2897,6 +2978,111 @@ document.addEventListener('click', function(e) {
   }
   drawTrail();
 })();
+
+// ============ LOADING SCREEN ============
+(function(){
+  const bar = document.getElementById('loadBar');
+  const screen = document.getElementById('loadingScreen');
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += Math.random() * 30 + 10;
+    if (progress >= 100) { progress = 100; clearInterval(interval); }
+    bar.style.width = progress + '%';
+    if (progress >= 100) {
+      setTimeout(() => {
+        screen.style.opacity = '0';
+        screen.style.visibility = 'hidden';
+        setTimeout(() => screen.remove(), 500);
+      }, 300);
+    }
+  }, 150);
+})();
+
+// ============ COUNTER ANIMATION ============
+function animateCounters() {
+  document.querySelectorAll('[data-count]').forEach(el => {
+    if (el.dataset.counted) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight * 0.85) {
+      el.dataset.counted = 'true';
+      const target = parseFloat(el.dataset.count);
+      const prefix = el.dataset.prefix || '';
+      const suffix = el.dataset.suffix || '';
+      const duration = 1500;
+      const start = performance.now();
+      function update(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = Math.round(target * eased);
+        el.textContent = prefix + current + suffix;
+        if (progress < 1) requestAnimationFrame(update);
+      }
+      requestAnimationFrame(update);
+    }
+  });
+}
+window.addEventListener('scroll', animateCounters);
+
+// ============ DECLASSIFIED MODE ============
+document.getElementById('declassifiedToggle').addEventListener('click', function() {
+  document.body.classList.toggle('declassified');
+  this.textContent = document.body.classList.contains('declassified') ? '[DECLASSIFIED]' : '[CLASSIFIED]';
+});
+
+// ============ COMMAND PALETTE ============
+(function(){
+  const palette = document.getElementById('cmdPalette');
+  const input = document.getElementById('cmdInput');
+  const results = document.getElementById('cmdResults');
+  const commands = [
+    { icon: '\u2B06', label: 'Go to Top', hint: 'hero', action: () => window.scrollTo({top:0,behavior:'smooth'}) },
+    { icon: '\uD83C\uDFAD', label: 'The Mask \u2014 How It Works', hint: '#mask', action: () => document.querySelector('#mask')?.scrollIntoView({behavior:'smooth'}) },
+    { icon: '\u26A1', label: 'Features', hint: '#features', action: () => document.querySelector('#features')?.scrollIntoView({behavior:'smooth'}) },
+    { icon: '\uD83D\uDD27', label: 'Tech Stack', hint: '#tech', action: () => document.querySelector('#tech')?.scrollIntoView({behavior:'smooth'}) },
+    { icon: '\uD83D\uDCCA', label: 'Performance', hint: '#performance', action: () => document.querySelector('#performance')?.scrollIntoView({behavior:'smooth'}) },
+    { icon: '\uD83D\uDCE5', label: 'Download', hint: '#download', action: () => document.querySelector('#download')?.scrollIntoView({behavior:'smooth'}) },
+    { icon: '\uD83D\uDD12', label: 'Toggle Declassified Mode', hint: 'terminal', action: () => document.getElementById('declassifiedToggle').click() },
+    { icon: '\uD83C\uDF10', label: 'Visit GitHub', hint: 'github.com', action: () => window.open('https://github.com/EmperorBadussy/faceless','_blank') },
+    { icon: '\uD83C\uDFE0', label: 'THE SUITE Hub', hint: 'suite', action: () => { document.body.classList.add('portal-out'); setTimeout(()=>window.location.href='https://emperorbadussy.github.io/suite/',600); } },
+    { icon: '\uD83C\uDFB5', label: 'AETHER', hint: 'music player', action: () => { document.body.classList.add('portal-out'); setTimeout(()=>window.location.href='https://emperorbadussy.github.io/aether/',600); } },
+    { icon: '\u26F5', label: 'CHARON', hint: 'ripper', action: () => { document.body.classList.add('portal-out'); setTimeout(()=>window.location.href='https://emperorbadussy.github.io/charon/',600); } },
+  ];
+  let activeIdx = 0;
+  function render(filter='') {
+    const filtered = commands.filter(c => (c.label+c.hint).toLowerCase().includes(filter.toLowerCase()));
+    activeIdx = 0;
+    results.innerHTML = filtered.map((c,i) => `<div class="cmd-item${i===0?' active':''}" data-idx="${i}"><span class="cmd-item-icon">${c.icon}</span><span class="cmd-item-label">${c.label}</span><span class="cmd-item-hint">${c.hint}</span></div>`).join('');
+    filtered.forEach((c,i) => {
+      results.children[i]?.addEventListener('click', () => { close(); c.action(); });
+    });
+    return filtered;
+  }
+  function open() { palette.style.display='flex'; input.value=''; render(); input.focus(); }
+  function close() { palette.style.display='none'; }
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey||e.metaKey) && e.key === 'k') { e.preventDefault(); palette.style.display==='flex' ? close() : open(); }
+    if (e.key === 'Escape' && palette.style.display==='flex') close();
+    if (palette.style.display==='flex') {
+      const items = results.querySelectorAll('.cmd-item');
+      if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx+1, items.length-1); items.forEach((el,i) => el.classList.toggle('active', i===activeIdx)); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx-1, 0); items.forEach((el,i) => el.classList.toggle('active', i===activeIdx)); }
+      if (e.key === 'Enter') { items[activeIdx]?.click(); }
+    }
+  });
+  input.addEventListener('input', () => render(input.value));
+  palette.addEventListener('click', e => { if (e.target === palette) close(); });
+})();
+
+// ============ PORTAL TRANSITIONS ============
+document.querySelectorAll('a[href*="emperorbadussy.github.io/aether"], a[href*="emperorbadussy.github.io/charon"], a[href*="emperorbadussy.github.io/suite"]').forEach(link => {
+  link.addEventListener('click', function(e) {
+    e.preventDefault();
+    const href = this.href;
+    document.body.classList.add('portal-out');
+    setTimeout(() => window.location.href = href, 600);
+  });
+});
 </script>
 </body>
 </html>
