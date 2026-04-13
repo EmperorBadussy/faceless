@@ -15,7 +15,7 @@ insightface==0.7.3
 psutil==5.9.8
 tk==0.1.0
 customtkinter==5.2.2
-pillow==12.1.1
+pillow==12.2.0
 
 # ONNX Runtime — GPU version for CUDA
 onnxruntime-silicon==1.16.3; sys_platform == 'darwin' and platform_machine == 'arm64'
