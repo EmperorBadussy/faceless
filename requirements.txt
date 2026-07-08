@@ -19,7 +19,9 @@ pillow==12.1.1
 
 # ONNX Runtime — GPU version for CUDA
 onnxruntime-silicon==1.16.3; sys_platform == 'darwin' and platform_machine == 'arm64'
-onnxruntime-gpu==1.24.2; sys_platform != 'darwin'
+# Pinned to the last CUDA 12 build. 1.25+ target CUDA 13 and fail on a CUDA 12.x stack.
+# Reuses the CUDA 12 + cuDNN 9 DLLs shipped with torch (cu12) / nvidia-*-cu12 wheels.
+onnxruntime-gpu==1.22.0; sys_platform != 'darwin'
 
 # TensorFlow — ONLY needed if you enable the NSFW filter (--nsfw-filter)
 # PHANTOM: Not auto-installed. Install manually if needed:
