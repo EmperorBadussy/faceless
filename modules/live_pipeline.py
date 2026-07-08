@@ -289,7 +289,7 @@ class LivePipeline:
         from modules.processors.frame.face_swapper import swap_face_gpu, apply_post_processing
         from modules.processors.frame.face_enhancer_gpen256 import enhance_face as gpen256_enhance
         from modules.processors.frame.face_enhancer_gpen512 import enhance_face as gpen512_enhance
-        from modules.processors.frame.face_enhancer import enhance_single_face as gfpgan_enhance
+        from modules.processors.frame.face_enhancer import enhance_frame as gfpgan_enhance
         from insightface.app.common import Face
 
         # GPU warp eliminates the CPU resolution bottleneck — process at native res
@@ -370,9 +370,9 @@ class LivePipeline:
                 for target_face in scaled_faces:
                     result = gpen512_enhance(result, target_face)
 
-            if modules.globals.fp_ui.get("face_enhancer", False):
-                for target_face in scaled_faces:
-                    result = gfpgan_enhance(result, target_face)
+            if modules.globals.fp_ui.get("face_enhancer", False) and scaled_faces:
+                # GFPGAN enhances all faces in one pass (unlike the per-face GPEN path).
+                result = gfpgan_enhance(result)
 
             # Paste swapped face regions onto original 1080p frame
             # instead of upscaling the entire 480p result (keeps background sharp)

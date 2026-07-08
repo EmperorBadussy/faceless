@@ -643,8 +643,13 @@ class PhantomServer:
 
             # Encode for WebSocket preview (downscaled)
             jpeg = await asyncio.to_thread(encode_frame_jpeg, frame)
-            if jpeg:
-                websockets.broadcast(self.clients, jpeg)
+            if jpeg and self.clients:
+                # Per-client send: the legacy websockets.broadcast() is incompatible
+                # with the asyncio-server ServerConnection objects this server uses.
+                await asyncio.gather(
+                    *[c.send(jpeg) for c in list(self.clients)],
+                    return_exceptions=True,
+                )
                 last_send = asyncio.get_event_loop().time()
 
     async def _stats_loop(self) -> None:

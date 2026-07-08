@@ -251,6 +251,19 @@ def _postprocess_face(output: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
 
 
+def enhance_frame(temp_frame: Frame) -> Frame:
+    """Live-pipeline entry point: enhance all faces in the frame once.
+
+    Wraps enhance_face so a missing or broken enhancer degrades to a passthrough
+    instead of killing the processing thread.
+    """
+    try:
+        return enhance_face(temp_frame)
+    except Exception as e:
+        print(f"[FACELESS] GFPGAN enhance skipped: {e}")
+        return temp_frame
+
+
 def enhance_face(temp_frame: Frame) -> Frame:
     """Enhances all faces in a frame using the GFPGAN ONNX model."""
     session = get_face_enhancer()
