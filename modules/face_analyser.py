@@ -18,6 +18,20 @@ FACE_ANALYSER_DETECT = None
 FACE_ANALYSER_LOCK = threading.Lock()
 
 
+def _warn_if_cpu(analyser: Any, label: str) -> None:
+    """Loudly warn if CUDA was requested but a model landed on the CPU provider."""
+    if not modules.globals.wants_cuda():
+        return
+    models = getattr(analyser, "models", {}) or {}
+    for name, model in models.items():
+        session = getattr(model, "session", None)
+        if session is None:
+            continue
+        provs = session.get_providers()
+        if "CUDAExecutionProvider" not in provs:
+            print(f"[FACELESS][WARN] {label} model '{name}' running on CPU, not CUDA: {provs}")
+
+
 def get_face_analyser() -> Any:
     """Get full face analyser (detection + recognition) for source face embedding."""
     global FACE_ANALYSER
@@ -30,10 +44,11 @@ def get_face_analyser() -> Any:
 
                 FACE_ANALYSER = insightface.app.FaceAnalysis(
                     name='buffalo_l',
-                    providers=modules.globals.execution_providers,
+                    providers=modules.globals.providers_with_options(),
                     allowed_modules=['detection', 'recognition']
                 )
                 FACE_ANALYSER.prepare(ctx_id=0, det_size=det_size)
+                _warn_if_cpu(FACE_ANALYSER, "face analyser (full)")
                 print(f"[FACELESS] Face analyser (full) ready: det_size={det_size}")
     return FACE_ANALYSER
 
@@ -50,10 +65,11 @@ def get_face_detector() -> Any:
 
                 FACE_ANALYSER_DETECT = insightface.app.FaceAnalysis(
                     name='buffalo_l',
-                    providers=modules.globals.execution_providers,
+                    providers=modules.globals.providers_with_options(),
                     allowed_modules=['detection']
                 )
                 FACE_ANALYSER_DETECT.prepare(ctx_id=0, det_size=det_size)
+                _warn_if_cpu(FACE_ANALYSER_DETECT, "face detector (fast)")
                 print(f"[FACELESS] Face detector (fast) ready: det_size={det_size}")
     return FACE_ANALYSER_DETECT
 

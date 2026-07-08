@@ -37,7 +37,18 @@ Observations:
 
 ## Phase 1 — CUDA provider options + no silent CPU fallback
 
-_(to be filled after Task 1.1)_
+Provider options now `cudnn_conv_algo_search: HEURISTIC` (was EXHAUSTIVE),
+`arena_extend_strategy: kSameAsRequested`. All sessions confirmed on
+`CUDAExecutionProvider`; no `[WARN] running on CPU`.
+
+| Target | Faces | detect (ms) | swap (ms) | total (ms) | FPS |
+|--------|------:|------------:|----------:|-----------:|----:|
+| streamers | 3 | 8.39 | 35.84 | 44.25 | 22.6 |
+
+Steady-state unchanged vs baseline (expected): HEURISTIC removes the first-inference
+EXHAUSTIVE algo-search stall and re-search on shape changes (a startup/latency win),
+which the warmup-discarding benchmark does not capture. Value here is correctness
+(no silent CPU fallback) + faster cold start, not steady-state throughput.
 
 ## Phase 2 — ROI-clipped resident-GPU swap
 

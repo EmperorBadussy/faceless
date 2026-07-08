@@ -146,7 +146,7 @@ def get_face_swapper() -> Any:
                     opts.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
                     session = onnxruntime.InferenceSession(
                         model_path, sess_options=opts,
-                        providers=modules.globals.execution_providers,
+                        providers=modules.globals.providers_with_options(),
                     )
                     FACE_SWAPPER = INSwapper(model_file=model_path, session=session)
                 else:
@@ -166,12 +166,23 @@ def get_face_swapper() -> Any:
                                     "MaximumCacheSize": 1024 * 1024 * 512,
                                 }
                             ))
+                        elif p == "CUDAExecutionProvider":
+                            providers_config.append(
+                                ("CUDAExecutionProvider", modules.globals.cuda_provider_options())
+                            )
                         else:
                             providers_config.append(p)
                     FACE_SWAPPER = insightface.model_zoo.get_model(
                         model_path, providers=providers_config,
                     )
                 update_status(f"Face swapper loaded: {os.path.basename(model_path)}", NAME)
+                _session = getattr(FACE_SWAPPER, "session", None)
+                if _session is not None:
+                    _provs = _session.get_providers()
+                    if modules.globals.wants_cuda() and "CUDAExecutionProvider" not in _provs:
+                        print(f"[FACELESS][WARN] Face swapper running on CPU, not CUDA: {_provs}")
+                    else:
+                        print(f"[FACELESS] Face swapper providers: {_provs}")
             except Exception as e:
                 update_status(f"Error loading face swapper: {e}", NAME)
                 FACE_SWAPPER = None

@@ -108,6 +108,39 @@ execution_threads: int | None = None
 headless: bool | None = None
 log_level: str = "error"
 
+
+def cuda_provider_options() -> dict:
+    """Tuned CUDAExecutionProvider options.
+
+    HEURISTIC avoids the multi-second EXHAUSTIVE cuDNN algo search that ORT runs
+    by default on first inference (and re-runs on every new input shape).
+    """
+    return {
+        "device_id": 0,
+        "cudnn_conv_algo_search": "HEURISTIC",
+        "do_copy_in_default_stream": True,
+        "arena_extend_strategy": "kSameAsRequested",
+    }
+
+
+def _provider_name(p) -> str:
+    return p[0] if isinstance(p, tuple) else p
+
+
+def providers_with_options() -> list:
+    """execution_providers with the CUDA entry expanded to (name, options)."""
+    out = []
+    for p in execution_providers:
+        if _provider_name(p) == "CUDAExecutionProvider":
+            out.append(("CUDAExecutionProvider", cuda_provider_options()))
+        else:
+            out.append(p)
+    return out
+
+
+def wants_cuda() -> bool:
+    return any(_provider_name(p) == "CUDAExecutionProvider" for p in execution_providers)
+
 # ── Face Processor UI Toggles ────────────────────────────────────────────────
 
 fp_ui: Dict[str, bool] = {
