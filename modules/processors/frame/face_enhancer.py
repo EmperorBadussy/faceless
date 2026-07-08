@@ -12,7 +12,7 @@ import onnxruntime
 import modules.globals
 import modules.processors.frame.core
 from modules.core import update_status
-from modules.face_analyser import get_one_face, get_many_faces
+from modules.face_analyser import get_one_face, get_many_faces, detect_many_faces
 from modules.typing import Frame, Face
 from modules.utilities import (
     is_image,
@@ -261,8 +261,9 @@ def enhance_face(temp_frame: Frame) -> Frame:
     except (ValueError, TypeError, IndexError):
         align_size = 512
 
-    # Detect faces using InsightFace (already a project dependency)
-    faces = get_many_faces(temp_frame)
+    # Detect faces using InsightFace (detection only — enhancement needs just
+    # landmarks for alignment, not the ArcFace recognition embedding).
+    faces = detect_many_faces(temp_frame)
     if not faces:
         return temp_frame
 

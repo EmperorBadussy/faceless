@@ -10,7 +10,7 @@ import numpy as np
 import modules.globals
 import modules.processors.frame.core
 from modules.core import update_status
-from modules.face_analyser import get_one_face
+from modules.face_analyser import detect_one_face
 from modules.typing import Frame, Face
 from modules.utilities import (
     is_image,
@@ -83,14 +83,14 @@ def enhance_face(temp_frame: Frame, face: Face) -> Frame:
 
 
 def process_frame(source_face: Face | None, temp_frame: Frame) -> Frame:
-    target_face = get_one_face(temp_frame)
+    target_face = detect_one_face(temp_frame)
     if target_face is None:
         return temp_frame
     return enhance_face(temp_frame, target_face)
 
 
 def process_frame_v2(temp_frame: Frame) -> Frame:
-    target_face = get_one_face(temp_frame)
+    target_face = detect_one_face(temp_frame)
     if target_face:
         temp_frame = enhance_face(temp_frame, target_face)
     return temp_frame
