@@ -546,7 +546,10 @@ class PhantomServer:
                 }))
                 return
             try:
-                self._vcam = pyvirtualcam.Camera(width=1920, height=1080, fps=30, print_fps=False)
+                self._vcam = pyvirtualcam.Camera(
+                    width=1920, height=1080, fps=30, print_fps=False,
+                    fmt=pyvirtualcam.PixelFormat.BGR,  # match pipeline output; no per-frame convert
+                )
                 self._vcam_enabled = True
                 self._vcam_err_logged = False
                 # Start dedicated vcam output thread for consistent timing
@@ -598,7 +601,7 @@ class PhantomServer:
                         vcam_frame = cv2.resize(frame, (self._vcam.width, self._vcam.height))
                     else:
                         vcam_frame = frame
-                    self._vcam.send(cv2.cvtColor(vcam_frame, cv2.COLOR_BGR2RGB))
+                    self._vcam.send(vcam_frame)  # camera is BGR; no conversion needed
                     self._vcam.sleep_until_next_frame()
                 except Exception as e:
                     if not getattr(self, '_vcam_err_logged', False):
@@ -614,23 +617,27 @@ class PhantomServer:
         last_send = 0.0
 
         while self._streaming:
+            # Pace FIRST, then pull the freshest frame. Pulling before the sleep
+            # would hold a frame for up to a full interval while the pipeline drops
+            # newer ones, adding a frame of latency to every send.
+            now = asyncio.get_event_loop().time()
+            elapsed = now - last_send
+            if elapsed < target_interval:
+                await asyncio.sleep(target_interval - elapsed)
+
             frame = self._pipeline.get_processed_frame()
-            if frame is not None:
-                now = asyncio.get_event_loop().time()
-                elapsed = now - last_send
-                if elapsed < target_interval:
-                    await asyncio.sleep(target_interval - elapsed)
+            if frame is None:
+                await asyncio.sleep(0.002)
+                continue
 
-                # Share frame with vcam thread
-                self._vcam_latest_frame = frame
+            # Share frame with vcam thread
+            self._vcam_latest_frame = frame
 
-                # Encode for WebSocket preview (downscaled)
-                jpeg = await asyncio.to_thread(encode_frame_jpeg, frame)
-                if jpeg:
-                    websockets.broadcast(self.clients, jpeg)
-                    last_send = asyncio.get_event_loop().time()
-            else:
-                await asyncio.sleep(0.008)
+            # Encode for WebSocket preview (downscaled)
+            jpeg = await asyncio.to_thread(encode_frame_jpeg, frame)
+            if jpeg:
+                websockets.broadcast(self.clients, jpeg)
+                last_send = asyncio.get_event_loop().time()
 
     async def _stats_loop(self) -> None:
         """Send FPS stats every 500ms."""

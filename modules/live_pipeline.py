@@ -183,11 +183,15 @@ class LivePipeline:
             print("[FACELESS] Failed to open camera")
             return
 
+        # Keep only the newest frame in the driver buffer so cap.read() does not
+        # return progressively older frames when the GPU pipeline lags the camera.
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        # Set MJPEG before resolution: several backends ignore a format change
+        # applied after width/height are set.
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         cap.set(cv2.CAP_PROP_FPS, fps)
-        # Try to enable MJPEG for higher FPS on USB cameras
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 
         actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
