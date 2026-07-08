@@ -20,7 +20,6 @@ from typing import List
 import platform
 import signal
 import shutil
-import tempfile
 import argparse
 import time
 
@@ -239,7 +238,13 @@ def release_resources() -> None:
 
 def _ensure_ffmpeg() -> bool:
     """True if ffmpeg is callable. Falls back to the imageio-ffmpeg bundled binary,
-    exposing it as 'ffmpeg' on PATH so shutil.which and subprocess('ffmpeg') work."""
+    exposing it as 'ffmpeg' on PATH so shutil.which and subprocess('ffmpeg') work.
+
+    Security: the fallback binary is placed in a per-user directory (~/.faceless/bin,
+    owned by the current user) and the directory is APPENDED to PATH. It is never
+    written to the shared temp dir nor prepended, so a hostile local user cannot
+    plant an executable that this process would then run (CWE-427 / CWE-377).
+    """
     if shutil.which('ffmpeg'):
         return True
     try:
@@ -250,17 +255,22 @@ def _ensure_ffmpeg() -> bool:
     if not src or not os.path.isfile(src):
         return False
     ext = os.path.splitext(src)[1]
-    cache_dir = os.path.join(tempfile.gettempdir(), 'faceless_ffmpeg')
-    os.makedirs(cache_dir, exist_ok=True)
-    dst = os.path.join(cache_dir, 'ffmpeg' + ext)
+    cache_dir = os.path.join(os.path.expanduser('~'), '.faceless', 'bin')
     try:
-        if not os.path.isfile(dst):
+        os.makedirs(cache_dir, exist_ok=True)
+        try:
+            os.chmod(cache_dir, 0o700)  # hardens POSIX; benign on Windows
+        except OSError:
+            pass
+        dst = os.path.join(cache_dir, 'ffmpeg' + ext)
+        # Re-copy if missing or size-mismatched (the dir is user-owned, so this
+        # cannot be raced by another user).
+        if not os.path.isfile(dst) or os.path.getsize(dst) != os.path.getsize(src):
             shutil.copy2(src, dst)
     except Exception:
-        dst = src  # fall back to using the binary in place
-        cache_dir = os.path.dirname(src)
-    if cache_dir not in os.environ.get('PATH', ''):
-        os.environ['PATH'] = cache_dir + os.pathsep + os.environ['PATH']
+        return False
+    if cache_dir not in os.environ.get('PATH', '').split(os.pathsep):
+        os.environ['PATH'] = os.environ.get('PATH', '') + os.pathsep + cache_dir
     return shutil.which('ffmpeg') is not None
 
 
