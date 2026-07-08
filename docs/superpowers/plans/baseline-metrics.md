@@ -52,7 +52,20 @@ which the warmup-discarding benchmark does not capture. Value here is correctnes
 
 ## Phase 2 — ROI-clipped resident-GPU swap
 
-_(to be filled after Task 2.1/2.2 — expect large multi-face gains)_
+`swap_face_gpu` now warps/blends only the face bbox (+64px) and uploads/downloads
+only that ROI instead of the full frame; crop mask cached. Output verified correct
+(no seams) at 1, 3, and 9 faces.
+
+| Target | Faces | swap baseline | swap now | total baseline | total now | FPS base | FPS now |
+|--------|------:|--------------:|---------:|---------------:|----------:|---------:|--------:|
+| movie      | 1 | 10.27 |  9.30 |  18.68 | 17.93 | 53.5 | 55.8 |
+| streamers  | 3 | 35.85 | 26.56 |  44.29 | 35.32 | 22.6 | 28.3 |
+| live_show  | 9 | 95.17 | 78.36 | 103.70 | 87.16 |  9.6 | 11.5 |
+
+Gain scales with face count (multi-face -26%, single -9%). Measurement reveals the
+full-frame warp was NOT the dominant single-face cost: there is a large per-face
+fixed cost (~8 ms/face) from the ONNX inswapper inference plus the per-face
+GPU->CPU sync in swap_face_gpu. That per-face fixed cost is the next target.
 
 ## Final
 

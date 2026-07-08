@@ -343,8 +343,10 @@ class LivePipeline:
             # Stabilize face landmarks with 1-Euro filter (removes jitter)
             scaled_faces = self._face_stabilizer.update(scaled_faces, time.time())
 
-            # Apply face swap(s) at process resolution
-            result = work_frame
+            # Apply face swap(s) at process resolution.
+            # Copy once so swap_face_gpu can write blended ROIs in place without
+            # mutating work_frame (which is shared with the detection thread).
+            result = work_frame.copy() if scaled_faces else work_frame
             swapped_bboxes = []
 
             for target_face in scaled_faces:

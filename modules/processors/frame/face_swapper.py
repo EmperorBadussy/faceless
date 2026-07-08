@@ -42,6 +42,27 @@ IS_APPLE_SILICON = platform.system() == 'Darwin' and platform.machine() == 'arm6
 _GPU_DEVICE = None
 _GPU_AVAILABLE = None
 _GRID_CACHE = {}  # (h, w) -> (grid_y, grid_x) pre-allocated meshgrids
+_CROP_MASK_CACHE = {}  # (cs, device) -> constant crop mask
+
+
+def _get_crop_mask(cs: int, device):
+    """Constant (1,1,cs,cs) mask: ones with an 8px zeroed border. Cached per size.
+
+    The border is zeroed so the crop's edge (which carries warp artifacts) is
+    excluded before the feather blur.
+    """
+    import torch
+    key = (cs, str(device))
+    m = _CROP_MASK_CACHE.get(key)
+    if m is None:
+        m = torch.ones(1, 1, cs, cs, device=device)
+        b = 8
+        m[:, :, :b, :] = 0
+        m[:, :, -b:, :] = 0
+        m[:, :, :, :b] = 0
+        m[:, :, :, -b:] = 0
+        _CROP_MASK_CACHE[key] = m
+    return m
 
 
 def _get_gpu():
@@ -232,13 +253,30 @@ def swap_face_gpu(source_face: Face, target_face: Face, temp_frame: Frame) -> Fr
         h, w = temp_frame.shape[:2]
         crop_size = float(bgr_fake.shape[0])  # 128
 
-        # Upload to GPU
-        fake_t = torch.from_numpy(np.ascontiguousarray(bgr_fake)).permute(2, 0, 1).unsqueeze(0).float().to(device)
-        target_t = torch.from_numpy(temp_frame).permute(2, 0, 1).unsqueeze(0).float().to(device)
+        # Restrict all GPU work to the face ROI (bbox + padding covering the blur
+        # feather). The warped face and mask are zero outside the crop anyway, so
+        # warping/blending the full frame just wastes ~99% of the pixels and forces
+        # a full-frame upload/download. Padding must exceed the k=41 blur radius.
+        k = 41
+        pad = 64
+        bbox = target_face.bbox.astype(int)
+        x0 = max(0, int(bbox[0]) - pad)
+        y0 = max(0, int(bbox[1]) - pad)
+        x1 = min(w, int(bbox[2]) + pad)
+        y1 = min(h, int(bbox[3]) + pad)
+        if x1 <= x0 or y1 <= y0:
+            return temp_frame
 
-        # Build sampling grid from affine matrix M
-        # M maps target pixel coords → crop (128x128) pixel coords
-        grid_y, grid_x = _get_meshgrid(h, w, device)
+        # Upload only the 128x128 swapped crop and the target ROI.
+        fake_t = torch.from_numpy(np.ascontiguousarray(bgr_fake)).permute(2, 0, 1).unsqueeze(0).float().to(device)
+        target_roi = np.ascontiguousarray(temp_frame[y0:y1, x0:x1])
+        target_t = torch.from_numpy(target_roi).permute(2, 0, 1).unsqueeze(0).float().to(device)
+
+        # Sampling grid over the ROI in ABSOLUTE frame coords (M maps frame coords
+        # -> 128 crop coords).
+        ys = torch.arange(y0, y1, device=device, dtype=torch.float32)
+        xs = torch.arange(x0, x1, device=device, dtype=torch.float32)
+        grid_y, grid_x = torch.meshgrid(ys, xs, indexing='ij')
         M_t = torch.from_numpy(M.astype(np.float32)).to(device)
 
         x_src = M_t[0, 0] * grid_x + M_t[0, 1] * grid_y + M_t[0, 2]
@@ -249,24 +287,16 @@ def swap_face_gpu(source_face: Face, target_face: Face, temp_frame: Frame) -> Fr
         y_norm = y_src * (2.0 / crop_size) - 1.0
         grid = torch.stack([x_norm, y_norm], dim=-1).unsqueeze(0)
 
-        # Warp swapped face into frame space
-        # border mode = repeat edge pixels instead of black outside crop
+        # Warp swapped face into ROI space (border mode repeats edge pixels)
         warped_face = F.grid_sample(fake_t, grid, mode='bilinear', padding_mode='border', align_corners=True)
 
-        # Mask: full 1.0 inside crop, 0 outside — let the blur handle feathering
+        # Constant crop mask (ones with 8px zeroed border), cached by size
         cs = int(crop_size)
-        mask_src = torch.ones(1, 1, cs, cs, device=device)
-        # Shrink 8px border so the very edge (which has warp artifacts) is excluded
-        b = 8
-        mask_src[:, :, :b, :] = 0
-        mask_src[:, :, -b:, :] = 0
-        mask_src[:, :, :, :b] = 0
-        mask_src[:, :, :, -b:] = 0
+        mask_src = _get_crop_mask(cs, device)
 
         warped_mask = F.grid_sample(mask_src, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
 
         # Heavy multi-pass blur for seamless feathered blend
-        k = 41
         warped_mask = F.avg_pool2d(warped_mask, kernel_size=k, stride=1, padding=k // 2)
         warped_mask = F.avg_pool2d(warped_mask, kernel_size=k, stride=1, padding=k // 2)
 
@@ -275,11 +305,10 @@ def swap_face_gpu(source_face: Face, target_face: Face, temp_frame: Frame) -> Fr
         if opacity < 1.0:
             warped_mask = warped_mask * opacity
 
-        # Blend on GPU
-        result_t = warped_face * warped_mask + target_t * (1.0 - warped_mask)
-
-        # Download to CPU
-        return result_t.squeeze(0).permute(1, 2, 0).clamp(0, 255).byte().cpu().numpy()
+        # Blend on GPU, write the ROI back in place, download only the ROI
+        result_roi = warped_face * warped_mask + target_t * (1.0 - warped_mask)
+        temp_frame[y0:y1, x0:x1] = result_roi.squeeze(0).permute(1, 2, 0).clamp(0, 255).byte().cpu().numpy()
+        return temp_frame
 
     except Exception as e:
         print(f"[FACELESS] GPU swap failed, falling back to CPU: {e}")
