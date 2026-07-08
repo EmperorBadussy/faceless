@@ -67,6 +67,30 @@ full-frame warp was NOT the dominant single-face cost: there is a large per-face
 fixed cost (~8 ms/face) from the ONNX inswapper inference plus the per-face
 GPU->CPU sync in swap_face_gpu. That per-face fixed cost is the next target.
 
-## Final
+## Per-face cost decomposition (measured)
 
-_(to be filled at end)_
+Profiling `swap_face_gpu` internals (single face, 810p, 100 iters):
+- ONNX `inswapper.get()` (128 crop + inference): **7.52 ms** ← dominant per-face cost
+- torch warp/blend/transfer (ROI): ~1.8 ms
+- frame.copy(): 0.49 ms
+
+The remaining per-face bottleneck is the ONNX swap inference itself, not the warp.
+7.5 ms for a 128x128 fp16 model on a 5090 is high; `TensorRT EP skipped (libs not
+installed)` in the logs. TensorRT (or IO binding + fp16 I/O) is the next lever, but
+it is a heavy dependency and out of the original plan's scope.
+
+## Status summary
+
+Done + verified: Phase 0 (GPU stack fixed — was running inference on CPU), Phase 1
+(provider options + CPU-fallback warnings; GpuProcessor channel-count fix), Phase 2
+(ROI-clipped swap: multi-face -26%), Phase 5 (dead code removed), Phase 4 partial
+(stale-frame pacing, buffersize, vcam BGR — verified by import, not live camera),
+Phase 3 partial (enhancers detect-only).
+
+Deferred (need decision or unavailable models / live camera to verify):
+- TensorRT EP for the swap inference (biggest remaining lever; heavy dep).
+- Task 3.2/3.3: GFPGAN mask caching port + enhancer warmup at real size (need
+  gfpgan-1024.onnx / GPEN models to benchmark).
+- Task 4.3: single camera open + pygrabber enumeration (startup-only; restructures
+  camera handling, needs a live device to verify).
+- reswapper_256.onnx (NORMAL preset default) not sourced; benchmarks used inswapper.
