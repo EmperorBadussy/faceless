@@ -554,10 +554,7 @@ class PhantomServer:
                 }))
                 return
             try:
-                self._vcam = pyvirtualcam.Camera(
-                    width=1920, height=1080, fps=30, print_fps=False,
-                    fmt=pyvirtualcam.PixelFormat.BGR,  # match pipeline output; no per-frame convert
-                )
+                self._vcam = pyvirtualcam.Camera(width=1920, height=1080, fps=30, print_fps=False)
                 self._vcam_enabled = True
                 self._vcam_err_logged = False
                 # Start dedicated vcam output thread for consistent timing
@@ -609,7 +606,7 @@ class PhantomServer:
                         vcam_frame = cv2.resize(frame, (self._vcam.width, self._vcam.height))
                     else:
                         vcam_frame = frame
-                    self._vcam.send(vcam_frame)  # camera is BGR; no conversion needed
+                    self._vcam.send(cv2.cvtColor(vcam_frame, cv2.COLOR_BGR2RGB))
                     self._vcam.sleep_until_next_frame()
                 except Exception as e:
                     if not getattr(self, '_vcam_err_logged', False):
