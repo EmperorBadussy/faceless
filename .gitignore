@@ -48,3 +48,6 @@ node_modules/
 .env.*
 *.key
 *.pem
+
+# Benchmark output
+bench_out.jpg
