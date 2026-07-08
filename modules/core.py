@@ -168,20 +168,24 @@ def decode_execution_providers(execution_providers: List[str]) -> List[str]:
         )
         if any(ep in encoded for ep in execution_providers)
     ]
-    # Auto-add TensorRT if CUDA is requested AND TensorRT libs are actually installed
+    # Auto-add TensorRT if CUDA is requested AND TensorRT libs are actually installed.
+    # pip ships versioned DLLs (nvinfer_10.dll), so ctypes find_library('nvinfer')
+    # fails; gpu_dll_setup registers the tensorrt_libs dir and records its presence.
     if 'CUDAExecutionProvider' in result and 'TensorrtExecutionProvider' in available:
         if 'TensorrtExecutionProvider' not in result:
-            # Check if TensorRT shared libs are actually on the system
             trt_found = shutil.which('trtexec') is not None
             if not trt_found:
-                # Also check common lib names
-                import ctypes.util
-                trt_found = ctypes.util.find_library('nvinfer') is not None
+                try:
+                    import modules.gpu_dll_setup as _dll
+                    trt_found = _dll.HAS_TENSORRT_LIBS
+                except Exception:
+                    import ctypes.util
+                    trt_found = ctypes.util.find_library('nvinfer') is not None
             if trt_found:
                 result.insert(0, 'TensorrtExecutionProvider')
                 print("[FACELESS] TensorRT EP enabled (auto, falls back to CUDA for unsupported ops)")
             else:
-                print("[FACELESS] TensorRT EP skipped (libs not installed) — using CUDA")
+                print("[FACELESS] TensorRT EP skipped (libs not installed), using CUDA")
     return result
 
 

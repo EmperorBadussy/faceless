@@ -51,3 +51,4 @@ node_modules/
 
 # Benchmark output
 bench_out.jpg
+models/trt_cache/

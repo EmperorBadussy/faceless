@@ -123,18 +123,44 @@ def cuda_provider_options() -> dict:
     }
 
 
+def trt_provider_options() -> dict:
+    """Tuned TensorrtExecutionProvider options.
+
+    fp16 for speed; engine + timing caches so the (slow) engine build happens once
+    and is reused across runs instead of rebuilding on every launch.
+    """
+    cache_dir = os.path.join(ROOT_DIR, "..", "models", "trt_cache")
+    cache_dir = os.path.abspath(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+    return {
+        "device_id": 0,
+        "trt_fp16_enable": True,
+        "trt_engine_cache_enable": True,
+        "trt_engine_cache_path": cache_dir,
+        "trt_timing_cache_enable": True,
+    }
+
+
 def _provider_name(p) -> str:
     return p[0] if isinstance(p, tuple) else p
 
 
+def provider_options_for(name: str):
+    """Options dict for a provider name, or None for bare providers."""
+    if name == "CUDAExecutionProvider":
+        return cuda_provider_options()
+    if name == "TensorrtExecutionProvider":
+        return trt_provider_options()
+    return None
+
+
 def providers_with_options() -> list:
-    """execution_providers with the CUDA entry expanded to (name, options)."""
+    """execution_providers with CUDA/TensorRT entries expanded to (name, options)."""
     out = []
     for p in execution_providers:
-        if _provider_name(p) == "CUDAExecutionProvider":
-            out.append(("CUDAExecutionProvider", cuda_provider_options()))
-        else:
-            out.append(p)
+        name = _provider_name(p)
+        opts = provider_options_for(name)
+        out.append((name, opts) if opts is not None else p)
     return out
 
 

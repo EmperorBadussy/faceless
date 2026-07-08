@@ -8,6 +8,7 @@ Usage:
 """
 import argparse
 import time
+import modules.gpu_dll_setup  # register CUDA/cuDNN/TensorRT DLL dirs before onnxruntime
 import torch  # import first: onnxruntime then reuses torch's CUDA 12 / cuDNN 9 DLLs
 import cv2
 import numpy as np

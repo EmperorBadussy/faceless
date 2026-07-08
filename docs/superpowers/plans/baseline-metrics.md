@@ -79,6 +79,27 @@ The remaining per-face bottleneck is the ONNX swap inference itself, not the war
 installed)` in the logs. TensorRT (or IO binding + fp16 I/O) is the next lever, but
 it is a heavy dependency and out of the original plan's scope.
 
+## TensorRT execution provider (biggest lever)
+
+Installed tensorrt-cu12 10.x (v11 is ABI-incompatible with onnxruntime 1.22's TRT
+EP). gpu_dll_setup.py registers the tensorrt_libs dir before onnxruntime imports;
+core.py detects TRT via that flag (pip ships versioned nvinfer_10.dll, so
+find_library('nvinfer') failed). Swap + detection sessions use the TRT EP with
+fp16 and an engine cache (models/trt_cache). First run builds engines (slow, ~1-2
+min), cached thereafter.
+
+Full result — ROI + TensorRT vs original baseline (HIGH preset, 100 iters):
+
+| Target | Faces | detect | swap | total | FPS | baseline FPS | speedup |
+|--------|------:|-------:|-----:|------:|----:|-------------:|--------:|
+| movie      | 1 | 5.69 |  5.18 | 10.89 | 91.8 | 53.5 | 1.72x |
+| streamers  | 3 | 5.63 | 13.64 | 19.29 | 51.8 | 22.6 | 2.29x |
+| live_show  | 9 | 5.56 | 39.05 | 44.64 | 22.4 |  9.6 | 2.33x |
+
+TensorRT fp16 cut per-face swap ~10.6 ms -> ~4.5 ms and detection 8.4 -> 5.6 ms.
+Output verified visually correct (no quality loss from fp16). The 9-face case moved
+from below real-time (9.6 FPS) to above (22.4 FPS).
+
 ## Status summary
 
 Done + verified: Phase 0 (GPU stack fixed — was running inference on CPU), Phase 1

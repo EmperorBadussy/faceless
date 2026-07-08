@@ -187,12 +187,9 @@ def get_face_swapper() -> Any:
                                     "MaximumCacheSize": 1024 * 1024 * 512,
                                 }
                             ))
-                        elif p == "CUDAExecutionProvider":
-                            providers_config.append(
-                                ("CUDAExecutionProvider", modules.globals.cuda_provider_options())
-                            )
                         else:
-                            providers_config.append(p)
+                            _opts = modules.globals.provider_options_for(p)
+                            providers_config.append((p, _opts) if _opts is not None else p)
                     FACE_SWAPPER = insightface.model_zoo.get_model(
                         model_path, providers=providers_config,
                     )
