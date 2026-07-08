@@ -25,6 +25,8 @@ onnxruntime-gpu==1.22.0; sys_platform != 'darwin'
 # TensorRT execution provider (optional but ~2x faster). Must be v10.x: onnxruntime
 # 1.22's TRT EP is built against TensorRT 10, so v11 fails to load. 10.7+ has Blackwell.
 tensorrt-cu12>=10.7,<11; sys_platform != 'darwin'
+# Bundled ffmpeg binary fallback so the app runs without a system ffmpeg install.
+imageio-ffmpeg
 
 # TensorFlow — ONLY needed if you enable the NSFW filter (--nsfw-filter)
 # PHANTOM: Not auto-installed. Install manually if needed:

@@ -20,6 +20,7 @@ from typing import List
 import platform
 import signal
 import shutil
+import tempfile
 import argparse
 import time
 
@@ -236,12 +237,39 @@ def release_resources() -> None:
         torch.cuda.empty_cache()
 
 
+def _ensure_ffmpeg() -> bool:
+    """True if ffmpeg is callable. Falls back to the imageio-ffmpeg bundled binary,
+    exposing it as 'ffmpeg' on PATH so shutil.which and subprocess('ffmpeg') work."""
+    if shutil.which('ffmpeg'):
+        return True
+    try:
+        import imageio_ffmpeg
+        src = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return False
+    if not src or not os.path.isfile(src):
+        return False
+    ext = os.path.splitext(src)[1]
+    cache_dir = os.path.join(tempfile.gettempdir(), 'faceless_ffmpeg')
+    os.makedirs(cache_dir, exist_ok=True)
+    dst = os.path.join(cache_dir, 'ffmpeg' + ext)
+    try:
+        if not os.path.isfile(dst):
+            shutil.copy2(src, dst)
+    except Exception:
+        dst = src  # fall back to using the binary in place
+        cache_dir = os.path.dirname(src)
+    if cache_dir not in os.environ.get('PATH', ''):
+        os.environ['PATH'] = cache_dir + os.pathsep + os.environ['PATH']
+    return shutil.which('ffmpeg') is not None
+
+
 def pre_check() -> bool:
     if sys.version_info < (3, 9):
         update_status('Python 3.9+ required.')
         return False
-    if not shutil.which('ffmpeg'):
-        update_status('ffmpeg not found. Install it first.')
+    if not _ensure_ffmpeg():
+        update_status('ffmpeg not found and imageio-ffmpeg unavailable. Install ffmpeg.')
         return False
     return True
 
