@@ -44,7 +44,7 @@ def get_face_analyser() -> Any:
 
                 FACE_ANALYSER = insightface.app.FaceAnalysis(
                     name='buffalo_l',
-                    providers=modules.globals.providers_with_options(),
+                    providers=modules.globals.cuda_only_providers(),
                     allowed_modules=['detection', 'recognition']
                 )
                 FACE_ANALYSER.prepare(ctx_id=0, det_size=det_size)
@@ -65,7 +65,7 @@ def get_face_detector() -> Any:
 
                 FACE_ANALYSER_DETECT = insightface.app.FaceAnalysis(
                     name='buffalo_l',
-                    providers=modules.globals.providers_with_options(),
+                    providers=modules.globals.cuda_only_providers(),
                     allowed_modules=['detection']
                 )
                 FACE_ANALYSER_DETECT.prepare(ctx_id=0, det_size=det_size)

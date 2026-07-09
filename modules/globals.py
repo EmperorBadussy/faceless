@@ -168,6 +168,24 @@ def providers_with_options() -> list:
     return out
 
 
+def cuda_only_providers() -> list:
+    """Like providers_with_options() but with TensorRT stripped.
+
+    The InsightFace analyser/detector bundles several models (detection,
+    recognition, landmark); under TRT their engine builds are flaky and source
+    detection intermittently returns no face. TRT is worth it only for the swap
+    model, so run detection/recognition on plain CUDA for stability.
+    """
+    out = []
+    for p in execution_providers:
+        name = _provider_name(p)
+        if name == "TensorrtExecutionProvider":
+            continue
+        opts = provider_options_for(name)
+        out.append((name, opts) if opts is not None else p)
+    return out
+
+
 def wants_cuda() -> bool:
     return any(_provider_name(p) == "CUDAExecutionProvider" for p in execution_providers)
 
