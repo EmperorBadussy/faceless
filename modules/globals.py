@@ -103,6 +103,7 @@ show_fps: bool = False
 # ── System ───────────────────────────────────────────────────────────────────
 
 max_memory: int | None = None
+min_swap_score: float = 0.55
 execution_providers: List[str] = []
 execution_threads: int | None = None
 headless: bool | None = None

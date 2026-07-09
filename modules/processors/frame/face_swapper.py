@@ -289,6 +289,13 @@ def swap_face_gpu(source_face: Face, target_face: Face, temp_frame: Frame) -> Fr
     if not hasattr(source_face, 'normed_embedding') or source_face.normed_embedding is None:
         return temp_frame
 
+    # Confidence gate: on a low-score detection (face occluded by a hand/phone,
+    # extreme angle, motion blur) the landmarks are unreliable and the swap warps
+    # into a melted mess. Pass the real frame through instead of swapping garbage.
+    min_score = getattr(modules.globals, "min_swap_score", 0.55)
+    if getattr(target_face, "det_score", 1.0) < min_score:
+        return temp_frame
+
     try:
         if temp_frame.dtype != np.uint8:
             temp_frame = np.clip(temp_frame, 0, 255).astype(np.uint8)
