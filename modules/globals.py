@@ -104,6 +104,7 @@ show_fps: bool = False
 
 max_memory: int | None = None
 min_swap_score: float = 0.55
+use_tensorrt: bool = False  # TRT fp16 corrupts the swap for some sources; CUDA is correct
 execution_providers: List[str] = []
 execution_threads: int | None = None
 headless: bool | None = None
