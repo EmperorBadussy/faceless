@@ -10,27 +10,37 @@ import { onBinaryFrame } from './useWebSocket'
 
 export function useFrameStream(imgRef: RefObject<HTMLImageElement | null>): void {
   useEffect(() => {
-    let currentUrl: string | null = null
+    // URL currently decoded and shown by the <img>. We must NOT revoke a Blob URL
+    // while the browser is still decoding/painting it, or the frame tears (torn
+    // stripes / partial render). This bug only shows at high frame rates, when a
+    // new frame arrives before the previous one finished decoding.
+    let displayedUrl: string | null = null
 
     onBinaryFrame.current = (blob: Blob) => {
-      // Revoke previous Blob URL to prevent memory leak
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl)
+      const img = imgRef.current
+      const url = URL.createObjectURL(blob)
+      if (!img) {
+        URL.revokeObjectURL(url)
+        return
       }
 
-      currentUrl = URL.createObjectURL(blob)
+      const prevUrl = displayedUrl
+      // Revoke the previously displayed frame only once the new one has decoded
+      // (or failed), so the visible frame is never freed mid-decode.
+      img.onload = img.onerror = () => {
+        if (prevUrl) URL.revokeObjectURL(prevUrl)
+      }
+      displayedUrl = url
 
       // Direct DOM update — bypasses React render cycle
-      if (imgRef.current) {
-        imgRef.current.src = currentUrl
-      }
+      img.src = url
     }
 
     return () => {
       onBinaryFrame.current = null
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl)
-        currentUrl = null
+      if (displayedUrl) {
+        URL.revokeObjectURL(displayedUrl)
+        displayedUrl = null
       }
     }
   }, [imgRef])
