@@ -168,10 +168,9 @@ def decode_execution_providers(execution_providers: List[str]) -> List[str]:
         )
         if any(ep in encoded for ep in execution_providers)
     ]
-    # TensorRT is OFF by default: its fp16 engine produces numerical garbage
-    # (green/magenta speckle) on the inswapper swap model for some source faces,
-    # corrupting the swap. Plain CUDA is correct for every source and still fast
-    # (~55 fps). Only opt in via modules.globals.use_tensorrt if you accept the risk.
+    # TensorRT is enabled with fp16 OFF (see globals.trt_provider_options). TRT's
+    # aggressive fp16 activations corrupted the swap (green/magenta) for some
+    # sources; fp32 is correct for every source and still faster than plain CUDA.
     if getattr(modules.globals, "use_tensorrt", False) and \
             'CUDAExecutionProvider' in result and 'TensorrtExecutionProvider' in available:
         if 'TensorrtExecutionProvider' not in result:
