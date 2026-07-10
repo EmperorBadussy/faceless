@@ -168,20 +168,25 @@ def decode_execution_providers(execution_providers: List[str]) -> List[str]:
         )
         if any(ep in encoded for ep in execution_providers)
     ]
-    # Auto-add TensorRT if CUDA is requested AND TensorRT libs are actually installed
-    if 'CUDAExecutionProvider' in result and 'TensorrtExecutionProvider' in available:
+    # TensorRT is enabled with fp16 OFF (see globals.trt_provider_options). TRT's
+    # aggressive fp16 activations corrupted the swap (green/magenta) for some
+    # sources; fp32 is correct for every source and still faster than plain CUDA.
+    if getattr(modules.globals, "use_tensorrt", False) and \
+            'CUDAExecutionProvider' in result and 'TensorrtExecutionProvider' in available:
         if 'TensorrtExecutionProvider' not in result:
-            # Check if TensorRT shared libs are actually on the system
             trt_found = shutil.which('trtexec') is not None
             if not trt_found:
-                # Also check common lib names
-                import ctypes.util
-                trt_found = ctypes.util.find_library('nvinfer') is not None
+                try:
+                    import modules.gpu_dll_setup as _dll
+                    trt_found = _dll.HAS_TENSORRT_LIBS
+                except Exception:
+                    import ctypes.util
+                    trt_found = ctypes.util.find_library('nvinfer') is not None
             if trt_found:
                 result.insert(0, 'TensorrtExecutionProvider')
                 print("[FACELESS] TensorRT EP enabled (auto, falls back to CUDA for unsupported ops)")
             else:
-                print("[FACELESS] TensorRT EP skipped (libs not installed) — using CUDA")
+                print("[FACELESS] TensorRT EP skipped (libs not installed), using CUDA")
     return result
 
 
@@ -232,12 +237,50 @@ def release_resources() -> None:
         torch.cuda.empty_cache()
 
 
+def _ensure_ffmpeg() -> bool:
+    """True if ffmpeg is callable. Falls back to the imageio-ffmpeg bundled binary,
+    exposing it as 'ffmpeg' on PATH so shutil.which and subprocess('ffmpeg') work.
+
+    Security: the fallback binary is placed in a per-user directory (~/.faceless/bin,
+    owned by the current user) and the directory is APPENDED to PATH. It is never
+    written to the shared temp dir nor prepended, so a hostile local user cannot
+    plant an executable that this process would then run (CWE-427 / CWE-377).
+    """
+    if shutil.which('ffmpeg'):
+        return True
+    try:
+        import imageio_ffmpeg
+        src = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return False
+    if not src or not os.path.isfile(src):
+        return False
+    ext = os.path.splitext(src)[1]
+    cache_dir = os.path.join(os.path.expanduser('~'), '.faceless', 'bin')
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        try:
+            os.chmod(cache_dir, 0o700)  # hardens POSIX; benign on Windows
+        except OSError:
+            pass
+        dst = os.path.join(cache_dir, 'ffmpeg' + ext)
+        # Re-copy if missing or size-mismatched (the dir is user-owned, so this
+        # cannot be raced by another user).
+        if not os.path.isfile(dst) or os.path.getsize(dst) != os.path.getsize(src):
+            shutil.copy2(src, dst)
+    except Exception:
+        return False
+    if cache_dir not in os.environ.get('PATH', '').split(os.pathsep):
+        os.environ['PATH'] = os.environ.get('PATH', '') + os.pathsep + cache_dir
+    return shutil.which('ffmpeg') is not None
+
+
 def pre_check() -> bool:
     if sys.version_info < (3, 9):
         update_status('Python 3.9+ required.')
         return False
-    if not shutil.which('ffmpeg'):
-        update_status('ffmpeg not found. Install it first.')
+    if not _ensure_ffmpeg():
+        update_status('ffmpeg not found and imageio-ffmpeg unavailable. Install ffmpeg.')
         return False
     return True
 

@@ -183,11 +183,15 @@ class LivePipeline:
             print("[FACELESS] Failed to open camera")
             return
 
+        # Keep only the newest frame in the driver buffer so cap.read() does not
+        # return progressively older frames when the GPU pipeline lags the camera.
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        # Set MJPEG before resolution: several backends ignore a format change
+        # applied after width/height are set.
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         cap.set(cv2.CAP_PROP_FPS, fps)
-        # Try to enable MJPEG for higher FPS on USB cameras
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 
         actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -285,7 +289,7 @@ class LivePipeline:
         from modules.processors.frame.face_swapper import swap_face_gpu, apply_post_processing
         from modules.processors.frame.face_enhancer_gpen256 import enhance_face as gpen256_enhance
         from modules.processors.frame.face_enhancer_gpen512 import enhance_face as gpen512_enhance
-        from modules.processors.frame.face_enhancer import enhance_single_face as gfpgan_enhance
+        from modules.processors.frame.face_enhancer import enhance_frame as gfpgan_enhance
         from insightface.app.common import Face
 
         # GPU warp eliminates the CPU resolution bottleneck — process at native res
@@ -343,8 +347,10 @@ class LivePipeline:
             # Stabilize face landmarks with 1-Euro filter (removes jitter)
             scaled_faces = self._face_stabilizer.update(scaled_faces, time.time())
 
-            # Apply face swap(s) at process resolution
-            result = work_frame
+            # Apply face swap(s) at process resolution.
+            # Copy once so swap_face_gpu can write blended ROIs in place without
+            # mutating work_frame (which is shared with the detection thread).
+            result = work_frame.copy() if scaled_faces else work_frame
             swapped_bboxes = []
 
             for target_face in scaled_faces:
@@ -364,9 +370,9 @@ class LivePipeline:
                 for target_face in scaled_faces:
                     result = gpen512_enhance(result, target_face)
 
-            if modules.globals.fp_ui.get("face_enhancer", False):
-                for target_face in scaled_faces:
-                    result = gfpgan_enhance(result, target_face)
+            if modules.globals.fp_ui.get("face_enhancer", False) and scaled_faces:
+                # GFPGAN enhances all faces in one pass (unlike the per-face GPEN path).
+                result = gfpgan_enhance(result)
 
             # Paste swapped face regions onto original 1080p frame
             # instead of upscaling the entire 480p result (keeps background sharp)

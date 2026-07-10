@@ -2,21 +2,10 @@
 
 import os
 import sys
-import glob
 
-# Add NVIDIA CUDA DLL paths (pip-installed) to PATH before any imports
-# This is required for onnxruntime to find cublasLt64_12.dll, cudnn, etc.
-try:
-    _nvidia_base = os.path.join(
-        os.path.dirname(os.path.dirname(__import__('nvidia.cublas').__file__))
-    )
-    for _pkg in glob.glob(os.path.join(_nvidia_base, 'nvidia', '*')):
-        for _sub in ('bin', 'lib'):
-            _p = os.path.join(_pkg, _sub)
-            if os.path.isdir(_p) and _p not in os.environ.get('PATH', ''):
-                os.environ['PATH'] = _p + os.pathsep + os.environ['PATH']
-except Exception:
-    pass  # nvidia packages not installed, skip
+# Register CUDA / cuDNN / TensorRT DLL directories before onnxruntime is imported.
+# Must run before any `from modules import ...` that pulls in onnxruntime.
+import modules.gpu_dll_setup  # noqa: F401
 
 if __name__ == '__main__':
     if '--server' in sys.argv:

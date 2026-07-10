@@ -58,11 +58,23 @@ except ImportError:
 # ── Camera Enumeration ─────────────────────────────────────────────────────
 
 def enumerate_cameras(max_index: int = 8) -> list:
-    """Enumerate available cameras via direct probe. Returns list of {index, name}."""
+    """Enumerate available cameras. Returns list of {index, name}.
+
+    Prefers pygrabber's DirectShow device list on Windows: it returns real device
+    names instantly without opening each device (opening non-existent indices can
+    hit multi-second backend timeouts). Falls back to a direct probe otherwise.
+    """
+    try:
+        from pygrabber.dshow_graph import FilterGraph
+        names = FilterGraph().get_input_devices()
+        if names:
+            return [{"index": i, "name": name} for i, name in enumerate(names)]
+    except Exception:
+        pass  # pygrabber unavailable or non-Windows — fall back to probing
+
     cameras = []
-    # Probe each index with CAP_ANY (most reliable on Windows)
-    # Skip index 0 initially — probe it last to avoid DSHOW C++ exceptions
-    # that can poison subsequent probes
+    # Probe each index with CAP_ANY (most reliable on Windows).
+    # Probe index 0 last to avoid DSHOW C++ exceptions poisoning later probes.
     indices = list(range(1, max_index)) + [0]
     for i in indices:
         try:
@@ -71,12 +83,9 @@ def enumerate_cameras(max_index: int = 8) -> list:
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 cameras.append({"index": i, "name": f"Camera {i} ({w}x{h})"})
-                cap.release()
-            else:
-                cap.release()
+            cap.release()
         except Exception:
             pass
-    # Sort by index for consistent ordering
     cameras.sort(key=lambda c: c["index"])
     return cameras
 
@@ -458,18 +467,17 @@ class PhantomServer:
         if self._streaming:
             return
 
-        # Validate camera before starting pipeline
+        # Validate camera before starting pipeline. One CAP_ANY probe: the pipeline
+        # opens the device again in _capture_loop, so avoid extra opens here (each
+        # VideoCapture open costs ~0.5-2s on Windows).
         def check_camera(idx: int) -> bool:
-            for backend in [cv2.CAP_DSHOW, cv2.CAP_ANY]:
-                try:
-                    cap = cv2.VideoCapture(idx, backend)
-                    if cap.isOpened():
-                        cap.release()
-                        return True
-                    cap.release()
-                except Exception:
-                    pass
-            return False
+            try:
+                cap = cv2.VideoCapture(idx, cv2.CAP_ANY)
+                ok = cap.isOpened()
+                cap.release()
+                return ok
+            except Exception:
+                return False
 
         camera_ok = await asyncio.to_thread(check_camera, camera_index)
         if not camera_ok:
@@ -614,23 +622,32 @@ class PhantomServer:
         last_send = 0.0
 
         while self._streaming:
+            # Pace FIRST, then pull the freshest frame. Pulling before the sleep
+            # would hold a frame for up to a full interval while the pipeline drops
+            # newer ones, adding a frame of latency to every send.
+            now = asyncio.get_event_loop().time()
+            elapsed = now - last_send
+            if elapsed < target_interval:
+                await asyncio.sleep(target_interval - elapsed)
+
             frame = self._pipeline.get_processed_frame()
-            if frame is not None:
-                now = asyncio.get_event_loop().time()
-                elapsed = now - last_send
-                if elapsed < target_interval:
-                    await asyncio.sleep(target_interval - elapsed)
+            if frame is None:
+                await asyncio.sleep(0.002)
+                continue
 
-                # Share frame with vcam thread
-                self._vcam_latest_frame = frame
+            # Share frame with vcam thread
+            self._vcam_latest_frame = frame
 
-                # Encode for WebSocket preview (downscaled)
-                jpeg = await asyncio.to_thread(encode_frame_jpeg, frame)
-                if jpeg:
-                    websockets.broadcast(self.clients, jpeg)
-                    last_send = asyncio.get_event_loop().time()
-            else:
-                await asyncio.sleep(0.008)
+            # Encode for WebSocket preview (downscaled)
+            jpeg = await asyncio.to_thread(encode_frame_jpeg, frame)
+            if jpeg and self.clients:
+                # Per-client send: the legacy websockets.broadcast() is incompatible
+                # with the asyncio-server ServerConnection objects this server uses.
+                await asyncio.gather(
+                    *[c.send(jpeg) for c in list(self.clients)],
+                    return_exceptions=True,
+                )
+                last_send = asyncio.get_event_loop().time()
 
     async def _stats_loop(self) -> None:
         """Send FPS stats every 500ms."""

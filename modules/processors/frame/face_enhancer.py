@@ -12,7 +12,7 @@ import onnxruntime
 import modules.globals
 import modules.processors.frame.core
 from modules.core import update_status
-from modules.face_analyser import get_one_face, get_many_faces
+from modules.face_analyser import get_one_face, get_many_faces, detect_many_faces
 from modules.typing import Frame, Face
 from modules.utilities import (
     is_image,
@@ -158,6 +158,26 @@ def _align_face(
     return aligned_face, affine_matrix
 
 
+_ALIGNED_MASK_CACHE: dict[int, np.ndarray] = {}
+
+
+def _get_aligned_feather_mask(output_size: int) -> np.ndarray:
+    """3-channel aligned-space feather mask (5% border ramp), cached by size."""
+    m = _ALIGNED_MASK_CACHE.get(output_size)
+    if m is None:
+        face_mask = np.ones((output_size, output_size), dtype=np.float32)
+        border = max(1, int(output_size * 0.05))
+        ramp_up = np.linspace(0.0, 1.0, border, dtype=np.float32)
+        ramp_down = np.linspace(1.0, 0.0, border, dtype=np.float32)
+        face_mask[:border, :] *= ramp_up[:, None]
+        face_mask[-border:, :] *= ramp_down[:, None]
+        face_mask[:, :border] *= ramp_up[None, :]
+        face_mask[:, -border:] *= ramp_down[None, :]
+        m = np.stack([face_mask] * 3, axis=-1)
+        _ALIGNED_MASK_CACHE[output_size] = m
+    return m
+
+
 def _paste_back(
     frame: Frame,
     enhanced_face: np.ndarray,
@@ -180,23 +200,9 @@ def _paste_back(
         borderValue=(0, 0, 0),
     )
 
-    # Build a soft feathered mask in aligned space for edge blending
-    face_mask = np.ones((output_size, output_size), dtype=np.float32)
-
-    # Feather the border (5 % of the size on each edge)
-    border = max(1, int(output_size * 0.05))
-    ramp_up = np.linspace(0.0, 1.0, border, dtype=np.float32)
-    ramp_down = np.linspace(1.0, 0.0, border, dtype=np.float32)
-
-    # Top / bottom rows
-    face_mask[:border, :] *= ramp_up[:, None]
-    face_mask[-border:, :] *= ramp_down[:, None]
-    # Left / right columns
-    face_mask[:, :border] *= ramp_up[None, :]
-    face_mask[:, -border:] *= ramp_down[None, :]
-
-    # Expand to 3-channel
-    face_mask_3c = np.stack([face_mask] * 3, axis=-1)
+    # Soft feathered mask in aligned space. Depends only on output_size, so build
+    # once and cache (was rebuilt with ramps + np.stack on every face).
+    face_mask_3c = _get_aligned_feather_mask(output_size)
 
     # Warp mask back to original frame space
     inv_mask = cv2.warpAffine(
@@ -245,6 +251,19 @@ def _postprocess_face(output: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
 
 
+def enhance_frame(temp_frame: Frame) -> Frame:
+    """Live-pipeline entry point: enhance all faces in the frame once.
+
+    Wraps enhance_face so a missing or broken enhancer degrades to a passthrough
+    instead of killing the processing thread.
+    """
+    try:
+        return enhance_face(temp_frame)
+    except Exception as e:
+        print(f"[FACELESS] GFPGAN enhance skipped: {e}")
+        return temp_frame
+
+
 def enhance_face(temp_frame: Frame) -> Frame:
     """Enhances all faces in a frame using the GFPGAN ONNX model."""
     session = get_face_enhancer()
@@ -261,8 +280,9 @@ def enhance_face(temp_frame: Frame) -> Frame:
     except (ValueError, TypeError, IndexError):
         align_size = 512
 
-    # Detect faces using InsightFace (already a project dependency)
-    faces = get_many_faces(temp_frame)
+    # Detect faces using InsightFace (detection only — enhancement needs just
+    # landmarks for alignment, not the ArcFace recognition embedding).
+    faces = detect_many_faces(temp_frame)
     if not faces:
         return temp_frame
 

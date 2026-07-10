@@ -109,9 +109,11 @@ class GpuProcessor:
     def __init__(self):
         self._gpu_mat = cv2.cuda.GpuMat() if CUDA_AVAILABLE else None
         self._gpu_tmp = cv2.cuda.GpuMat() if CUDA_AVAILABLE else None
+        self._channels = 3
 
     def upload(self, frame: np.ndarray) -> bool:
         """Upload frame to GPU. Returns True if on GPU, False if CPU fallback."""
+        self._channels = frame.shape[2] if frame.ndim == 3 else 1
         if not CUDA_AVAILABLE or self._gpu_mat is None:
             self._cpu_frame = frame
             return False
@@ -138,7 +140,7 @@ class GpuProcessor:
 
     def gaussian_blur(self, ksize: Tuple[int, int], sigma_x: float, sigma_y: float = 0):
         if CUDA_AVAILABLE and self._gpu_mat is not None:
-            cv_type = _cv_type_for(self._gpu_mat.download())  # Need type info
+            cv_type = cv2.CV_8UC(self._channels)  # cached at upload — no download
             ks = _ksize_odd(ksize) if ksize != (0, 0) else ksize
             filt = _get_gaussian_filter(cv_type, ks, sigma_x, sigma_y)
             self._gpu_mat = filt.apply(self._gpu_mat)
@@ -149,7 +151,7 @@ class GpuProcessor:
         if strength <= 0:
             return
         if CUDA_AVAILABLE and self._gpu_mat is not None:
-            cv_type = _cv_type_for(self._gpu_mat.download())
+            cv_type = cv2.CV_8UC(self._channels)  # cached at upload — no download
             filt = _get_gaussian_filter(cv_type, (0, 0), sigma)
             blurred = filt.apply(self._gpu_mat)
             self._gpu_mat = cv2.cuda.addWeighted(self._gpu_mat, 1.0 + strength, blurred, -strength, 0)

@@ -19,7 +19,14 @@ pillow==12.1.1
 
 # ONNX Runtime — GPU version for CUDA
 onnxruntime-silicon==1.16.3; sys_platform == 'darwin' and platform_machine == 'arm64'
-onnxruntime-gpu==1.24.2; sys_platform != 'darwin'
+# Pinned to the last CUDA 12 build. 1.25+ target CUDA 13 and fail on a CUDA 12.x stack.
+# Reuses the CUDA 12 + cuDNN 9 DLLs shipped with torch (cu12) / nvidia-*-cu12 wheels.
+onnxruntime-gpu==1.22.0; sys_platform != 'darwin'
+# TensorRT execution provider (optional but ~2x faster). Must be v10.x: onnxruntime
+# 1.22's TRT EP is built against TensorRT 10, so v11 fails to load. 10.7+ has Blackwell.
+tensorrt-cu12>=10.7,<11; sys_platform != 'darwin'
+# Bundled ffmpeg binary fallback so the app runs without a system ffmpeg install.
+imageio-ffmpeg
 
 # TensorFlow — ONLY needed if you enable the NSFW filter (--nsfw-filter)
 # PHANTOM: Not auto-installed. Install manually if needed:

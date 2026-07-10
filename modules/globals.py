@@ -103,10 +103,91 @@ show_fps: bool = False
 # ── System ───────────────────────────────────────────────────────────────────
 
 max_memory: int | None = None
+min_swap_score: float = 0.55
+use_tensorrt: bool = True  # TRT with fp16 OFF (see trt_provider_options): correct + faster than CUDA
 execution_providers: List[str] = []
 execution_threads: int | None = None
 headless: bool | None = None
 log_level: str = "error"
+
+
+def cuda_provider_options() -> dict:
+    """Tuned CUDAExecutionProvider options.
+
+    HEURISTIC avoids the multi-second EXHAUSTIVE cuDNN algo search that ORT runs
+    by default on first inference (and re-runs on every new input shape).
+    """
+    return {
+        "device_id": 0,
+        "cudnn_conv_algo_search": "HEURISTIC",
+        "do_copy_in_default_stream": True,
+        "arena_extend_strategy": "kSameAsRequested",
+    }
+
+
+def trt_provider_options() -> dict:
+    """Tuned TensorrtExecutionProvider options.
+
+    fp16 is DISABLED: TRT's aggressive fp16 activations overflow on the inswapper
+    swap model for some source faces and produce green/magenta garbage. fp32 is
+    numerically correct for every source AND still faster than plain CUDA
+    (~3.6 ms/face vs ~6 ms). Engine + timing caches so the slow build happens once.
+    """
+    cache_dir = os.path.join(ROOT_DIR, "..", "models", "trt_cache_fp32")
+    cache_dir = os.path.abspath(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+    return {
+        "device_id": 0,
+        "trt_fp16_enable": False,
+        "trt_engine_cache_enable": True,
+        "trt_engine_cache_path": cache_dir,
+        "trt_timing_cache_enable": True,
+    }
+
+
+def _provider_name(p) -> str:
+    return p[0] if isinstance(p, tuple) else p
+
+
+def provider_options_for(name: str):
+    """Options dict for a provider name, or None for bare providers."""
+    if name == "CUDAExecutionProvider":
+        return cuda_provider_options()
+    if name == "TensorrtExecutionProvider":
+        return trt_provider_options()
+    return None
+
+
+def providers_with_options() -> list:
+    """execution_providers with CUDA/TensorRT entries expanded to (name, options)."""
+    out = []
+    for p in execution_providers:
+        name = _provider_name(p)
+        opts = provider_options_for(name)
+        out.append((name, opts) if opts is not None else p)
+    return out
+
+
+def cuda_only_providers() -> list:
+    """Like providers_with_options() but with TensorRT stripped.
+
+    The InsightFace analyser/detector bundles several models (detection,
+    recognition, landmark); under TRT their engine builds are flaky and source
+    detection intermittently returns no face. TRT is worth it only for the swap
+    model, so run detection/recognition on plain CUDA for stability.
+    """
+    out = []
+    for p in execution_providers:
+        name = _provider_name(p)
+        if name == "TensorrtExecutionProvider":
+            continue
+        opts = provider_options_for(name)
+        out.append((name, opts) if opts is not None else p)
+    return out
+
+
+def wants_cuda() -> bool:
+    return any(_provider_name(p) == "CUDAExecutionProvider" for p in execution_providers)
 
 # ── Face Processor UI Toggles ────────────────────────────────────────────────
 

@@ -42,6 +42,27 @@ IS_APPLE_SILICON = platform.system() == 'Darwin' and platform.machine() == 'arm6
 _GPU_DEVICE = None
 _GPU_AVAILABLE = None
 _GRID_CACHE = {}  # (h, w) -> (grid_y, grid_x) pre-allocated meshgrids
+_CROP_MASK_CACHE = {}  # (cs, device) -> constant crop mask
+
+
+def _get_crop_mask(cs: int, device):
+    """Constant (1,1,cs,cs) mask: ones with an 8px zeroed border. Cached per size.
+
+    The border is zeroed so the crop's edge (which carries warp artifacts) is
+    excluded before the feather blur.
+    """
+    import torch
+    key = (cs, str(device))
+    m = _CROP_MASK_CACHE.get(key)
+    if m is None:
+        m = torch.ones(1, 1, cs, cs, device=device)
+        b = 8
+        m[:, :, :b, :] = 0
+        m[:, :, -b:, :] = 0
+        m[:, :, :, :b] = 0
+        m[:, :, :, -b:] = 0
+        _CROP_MASK_CACHE[key] = m
+    return m
 
 
 def _get_gpu():
@@ -146,7 +167,7 @@ def get_face_swapper() -> Any:
                     opts.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
                     session = onnxruntime.InferenceSession(
                         model_path, sess_options=opts,
-                        providers=modules.globals.execution_providers,
+                        providers=modules.globals.providers_with_options(),
                     )
                     FACE_SWAPPER = INSwapper(model_file=model_path, session=session)
                 else:
@@ -167,11 +188,19 @@ def get_face_swapper() -> Any:
                                 }
                             ))
                         else:
-                            providers_config.append(p)
+                            _opts = modules.globals.provider_options_for(p)
+                            providers_config.append((p, _opts) if _opts is not None else p)
                     FACE_SWAPPER = insightface.model_zoo.get_model(
                         model_path, providers=providers_config,
                     )
                 update_status(f"Face swapper loaded: {os.path.basename(model_path)}", NAME)
+                _session = getattr(FACE_SWAPPER, "session", None)
+                if _session is not None:
+                    _provs = _session.get_providers()
+                    if modules.globals.wants_cuda() and "CUDAExecutionProvider" not in _provs:
+                        print(f"[FACELESS][WARN] Face swapper running on CPU, not CUDA: {_provs}")
+                    else:
+                        print(f"[FACELESS] Face swapper providers: {_provs}")
             except Exception as e:
                 update_status(f"Error loading face swapper: {e}", NAME)
                 FACE_SWAPPER = None
@@ -179,99 +208,120 @@ def get_face_swapper() -> Any:
     return FACE_SWAPPER
 
 
-def swap_face_gpu(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
-    """GPU-accelerated face swap — bypasses InsightFace CPU warp with PyTorch grid_sample.
+_PASTE_CACHE = {'soft_alpha': None, 'alpha_size': 0}
 
-    ~30x faster than CPU paste_back: warps 128x128 result onto frame entirely on GPU.
-    Falls back to CPU swap_face() if PyTorch CUDA is unavailable.
+
+def _get_soft_alpha(size: int) -> np.ndarray:
+    """Feathered elliptical alpha template in aligned-face space, cached by size.
+
+    An ellipse (axes 0.44*size) heavily blurred so the swapped square's corners
+    are transparent and the edge feathers smoothly into the original. Warped by
+    the inverse affine per frame — the feather radius scales with the transform.
+    (Ported from Deep-Live-Cam's proven paste-back.)
     """
-    import torch
-    import torch.nn.functional as F
+    if _PASTE_CACHE['alpha_size'] != size:
+        center = (size // 2, size // 2)
+        axes = (int(size * 0.44), int(size * 0.44))
+        mask = np.zeros((size, size), dtype=np.uint8)
+        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
+        mask = cv2.GaussianBlur(mask, (31, 31), 12)
+        _PASTE_CACHE['soft_alpha'] = mask
+        _PASTE_CACHE['alpha_size'] = size
+    return _PASTE_CACHE['soft_alpha']
 
-    device = _get_gpu()
-    if device is None:
-        return swap_face(source_face, target_face, temp_frame)
 
+def _fast_paste_back(target_img: Frame, bgr_fake: np.ndarray, face_size: int, M: np.ndarray) -> Frame:
+    """Paste the aligned swapped face back via the INVERSE affine of M.
+
+    Standard, correct inverse-affine warp (the same math InsightFace uses for
+    paste_back=True) restricted to the face bbox in output coords. This replaces
+    the previous hand-rolled grid_sample warp, whose coordinate normalization was
+    wrong and scrambled the face under motion. Ported from Deep-Live-Cam.
+    """
+    h, w = target_img.shape[:2]
+    IM = cv2.invertAffineTransform(M)
+
+    corners = np.array([[0, 0], [face_size, 0], [face_size, face_size], [0, face_size]], dtype=np.float32)
+    transformed = (IM[:, :2] @ corners.T).T + IM[:, 2]
+    x1 = int(np.floor(transformed[:, 0].min()))
+    x2 = int(np.ceil(transformed[:, 0].max()))
+    y1 = int(np.floor(transformed[:, 1].min()))
+    y2 = int(np.ceil(transformed[:, 1].max()))
+    if x1 >= x2 or y1 >= y2:
+        return target_img
+
+    pad = 2
+    y1p, y2p = max(0, y1 - pad), min(h, y2 + pad + 1)
+    x1p, x2p = max(0, x1 - pad), min(w, x2 + pad + 1)
+
+    IM_crop = IM.copy()
+    IM_crop[0, 2] -= x1p
+    IM_crop[1, 2] -= y1p
+    crop_w, crop_h = x2p - x1p, y2p - y1p
+
+    soft_alpha = _get_soft_alpha(face_size)
+    bgr_fake_crop = cv2.warpAffine(bgr_fake, IM_crop, (crop_w, crop_h), borderMode=cv2.BORDER_REPLICATE)
+    alpha_crop = cv2.warpAffine(soft_alpha, IM_crop, (crop_w, crop_h), borderValue=0)
+
+    opacity = getattr(modules.globals, "opacity", 1.0)
+    if opacity < 1.0:
+        alpha_crop = (alpha_crop.astype(np.float32) * max(0.0, min(1.0, opacity))).astype(np.uint8)
+
+    target_crop = target_img[y1p:y2p, x1p:x2p]
+    alpha_3c = cv2.merge([alpha_crop, alpha_crop, alpha_crop])
+    inv_alpha = 255 - alpha_3c
+    a_fake = cv2.multiply(bgr_fake_crop, alpha_3c, scale=1.0 / 255.0)
+    a_tgt = cv2.multiply(target_crop, inv_alpha, scale=1.0 / 255.0)
+    target_img[y1p:y2p, x1p:x2p] = cv2.add(a_fake, a_tgt)
+    return target_img
+
+
+def swap_face_gpu(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
+    """Face swap: GPU ONNX inference (CUDA/TensorRT) + correct inverse-affine paste.
+
+    The neural swap (get, paste_back=False) runs on GPU; the paste-back is a
+    ROI-only cv2.warpAffine — the proven Deep-Live-Cam path, not the old
+    grid_sample warp that scrambled faces under motion.
+    """
     face_swapper = get_face_swapper()
     if face_swapper is None or source_face is None or target_face is None:
         return temp_frame
     if not hasattr(source_face, 'normed_embedding') or source_face.normed_embedding is None:
         return temp_frame
 
+    # Confidence gate: on a low-score detection (face occluded by a hand/phone,
+    # extreme angle, motion blur) the landmarks are unreliable and the swap warps
+    # into a melted mess. Pass the real frame through instead of swapping garbage.
+    min_score = getattr(modules.globals, "min_swap_score", 0.55)
+    if getattr(target_face, "det_score", 1.0) < min_score:
+        return temp_frame
+
     try:
+        if temp_frame.dtype != np.uint8:
+            temp_frame = np.clip(temp_frame, 0, 255).astype(np.uint8)
         if not temp_frame.flags['C_CONTIGUOUS']:
             temp_frame = np.ascontiguousarray(temp_frame)
 
-        # Get raw 128x128 swapped face + affine matrix (no CPU warp)
         result = face_swapper.get(temp_frame, target_face, source_face, paste_back=False)
         if result is None:
             return temp_frame
         bgr_fake, M = result
+        if bgr_fake is None or not isinstance(bgr_fake, np.ndarray):
+            return temp_frame
 
-        # Color correction: match swapped face color to target skin tone
-        if modules.globals.color_correction and target_face is not None:
+        if modules.globals.color_correction:
             bbox = target_face.bbox.astype(int)
-            x1, y1 = max(0, bbox[0]), max(0, bbox[1])
-            x2, y2 = min(temp_frame.shape[1], bbox[2]), min(temp_frame.shape[0], bbox[3])
-            if x2 > x1 and y2 > y1:
-                target_crop = temp_frame[y1:y2, x1:x2]
+            cx1, cy1 = max(0, bbox[0]), max(0, bbox[1])
+            cx2, cy2 = min(temp_frame.shape[1], bbox[2]), min(temp_frame.shape[0], bbox[3])
+            if cx2 > cx1 and cy2 > cy1:
+                target_crop = temp_frame[cy1:cy2, cx1:cx2]
                 target_resized = cv2.resize(target_crop, (bgr_fake.shape[1], bgr_fake.shape[0]))
                 bgr_fake = apply_color_transfer(bgr_fake, target_resized)
 
-        h, w = temp_frame.shape[:2]
-        crop_size = float(bgr_fake.shape[0])  # 128
-
-        # Upload to GPU
-        fake_t = torch.from_numpy(np.ascontiguousarray(bgr_fake)).permute(2, 0, 1).unsqueeze(0).float().to(device)
-        target_t = torch.from_numpy(temp_frame).permute(2, 0, 1).unsqueeze(0).float().to(device)
-
-        # Build sampling grid from affine matrix M
-        # M maps target pixel coords → crop (128x128) pixel coords
-        grid_y, grid_x = _get_meshgrid(h, w, device)
-        M_t = torch.from_numpy(M.astype(np.float32)).to(device)
-
-        x_src = M_t[0, 0] * grid_x + M_t[0, 1] * grid_y + M_t[0, 2]
-        y_src = M_t[1, 0] * grid_x + M_t[1, 1] * grid_y + M_t[1, 2]
-
-        # Normalize to [-1, 1] for grid_sample
-        x_norm = x_src * (2.0 / crop_size) - 1.0
-        y_norm = y_src * (2.0 / crop_size) - 1.0
-        grid = torch.stack([x_norm, y_norm], dim=-1).unsqueeze(0)
-
-        # Warp swapped face into frame space
-        # border mode = repeat edge pixels instead of black outside crop
-        warped_face = F.grid_sample(fake_t, grid, mode='bilinear', padding_mode='border', align_corners=True)
-
-        # Mask: full 1.0 inside crop, 0 outside — let the blur handle feathering
-        cs = int(crop_size)
-        mask_src = torch.ones(1, 1, cs, cs, device=device)
-        # Shrink 8px border so the very edge (which has warp artifacts) is excluded
-        b = 8
-        mask_src[:, :, :b, :] = 0
-        mask_src[:, :, -b:, :] = 0
-        mask_src[:, :, :, :b] = 0
-        mask_src[:, :, :, -b:] = 0
-
-        warped_mask = F.grid_sample(mask_src, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
-
-        # Heavy multi-pass blur for seamless feathered blend
-        k = 41
-        warped_mask = F.avg_pool2d(warped_mask, kernel_size=k, stride=1, padding=k // 2)
-        warped_mask = F.avg_pool2d(warped_mask, kernel_size=k, stride=1, padding=k // 2)
-
-        # Apply opacity
-        opacity = getattr(modules.globals, "opacity", 1.0)
-        if opacity < 1.0:
-            warped_mask = warped_mask * opacity
-
-        # Blend on GPU
-        result_t = warped_face * warped_mask + target_t * (1.0 - warped_mask)
-
-        # Download to CPU
-        return result_t.squeeze(0).permute(1, 2, 0).clamp(0, 255).byte().cpu().numpy()
+        return _fast_paste_back(temp_frame, bgr_fake, bgr_fake.shape[0], M)
 
     except Exception as e:
-        print(f"[FACELESS] GPU swap failed, falling back to CPU: {e}")
+        print(f"[FACELESS] swap failed, falling back to CPU: {e}")
         return swap_face(source_face, target_face, temp_frame)
 
 
@@ -396,42 +446,6 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
     final_swapped_frame = gpu_add_weighted(original_frame.astype(np.uint8), 1 - opacity, swapped_frame.astype(np.uint8), opacity, 0)
     return final_swapped_frame.astype(np.uint8)
 
-
-# --- START: Mac M1-M5 Optimized Face Detection ---
-def get_faces_optimized(frame: Frame, use_cache: bool = True) -> Optional[List[Face]]:
-    """Optimized face detection for live mode on Apple Silicon"""
-    global LAST_DETECTION_TIME, FACE_DETECTION_CACHE
-    
-    if not use_cache or not IS_APPLE_SILICON:
-        # Standard detection
-        if modules.globals.many_faces:
-            return get_many_faces(frame)
-        else:
-            face = get_one_face(frame)
-            return [face] if face else None
-    
-    # Adaptive detection rate for live mode
-    current_time = time.time()
-    time_since_last = current_time - LAST_DETECTION_TIME
-    
-    # Skip detection if too soon (adaptive frame skipping)
-    if time_since_last < DETECTION_INTERVAL and FACE_DETECTION_CACHE:
-        return FACE_DETECTION_CACHE.get('faces')
-    
-    # Perform detection
-    LAST_DETECTION_TIME = current_time
-    if modules.globals.many_faces:
-        faces = get_many_faces(frame)
-    else:
-        face = get_one_face(frame)
-        faces = [face] if face else None
-    
-    # Cache results
-    FACE_DETECTION_CACHE['faces'] = faces
-    FACE_DETECTION_CACHE['timestamp'] = current_time
-    
-    return faces
-# --- END: Mac M1-M5 Optimized Face Detection ---
 
 # --- START: Helper function for interpolation and sharpening ---
 def apply_post_processing(current_frame: Frame, swapped_face_bboxes: List[np.ndarray]) -> Frame:
